@@ -9,6 +9,7 @@ from telegram.ext import (
 )
 from dotenv import load_dotenv
 import aiohttp
+from pathlib import Path
 
 # Charger les variables d'environnement
 load_dotenv()
