@@ -130,9 +130,9 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data == "recharge":
         async with aiohttp.ClientSession() as session:
             body = {
-                "price_amount": 30,
+                "price_amount": 5,
                 "price_currency": "eur",
-                "pay_currency": "btc",
+                "pay_currency": "usdttrc20",
                 "order_id": user_id,
                 "order_description": "Recharge crédits LemonSpoofer"
             }
