@@ -57,10 +57,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     license_status = user_data['license_expiry'] or '❌ Inactive'
 
     msg = (
-        f"👋 Bienvenue {user.first_name} !\n\n"
+        f"👋 Bienvenue sur Lemon Spoofer {user.first_name} !\n\n"
         f"🆔 ID: <code>{uid}</code>\n"
         f"💳 Crédits : {user_data['credits']}\n"
-        f"📅 Licence : {license_status}\n"
+        f"🪪 Licence : {license_status}\n"
         f"🕒 Heure : {now}"
     )
     await update.message.reply_text(msg, reply_markup=main_menu(uid), parse_mode="HTML")
@@ -130,9 +130,9 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data == "recharge":
         async with aiohttp.ClientSession() as session:
             body = {
-                "price_amount": 5,
+                "price_amount": 30,
                 "price_currency": "eur",
-                "pay_currency": "usdttrc20",
+                "pay_currency": "btc",
                 "order_id": user_id,
                 "order_description": "Recharge crédits LemonSpoofer"
             }
