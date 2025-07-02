@@ -36,10 +36,10 @@ def save_user(user_id):
 # ⌨️ Menu principal
 def menu():
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("📞 Accès SIP", callback_data="sip"), InlineKeyboardButton("💳 Recharger", callback_data="recharger")],
-        [InlineKeyboardButton("🆔 Caller ID", callback_data="caller_id"), InlineKeyboardButton("🎵 Musique d’attente", callback_data="musique")],
-        [InlineKeyboardButton("💬 SMS Sender", callback_data="sms"), InlineKeyboardButton("📧 Mail Sender", callback_data="mail")],
-        [InlineKeyboardButton("⚙️ Paramètres", callback_data="parametres")]
+        [InlineKeyboardButton("📞 Accès SIP", callback_data=sip"), InlineKeyboardButton("💳 Recharger", callback_data=recharger")],
+        [InlineKeyboardButton("🆔 Caller ID", callback_data=caller_id"), InlineKeyboardButton("🎵 Musique d’attente", callback_data=musique")],
+        [InlineKeyboardButton("💬 SMS Sender", callback_data=sms"), InlineKeyboardButton("📧 Mail Sender", callback_data=mail")],
+        [InlineKeyboardButton("⚙️ Paramètres", callback_data=parametres")]
     ])
 
 # 🟢 Commande /start
@@ -75,9 +75,9 @@ async def acheter(update: Update, context: ContextTypes.DEFAULT_TYPE):
             data = await resp.json()
 
     if "invoice_url" in data:
-        await update.message.reply_text(f"🔐 Paiement licence (120€ pour 2 mois) :\n{data['invoice_url']}")
+        await update.message.reply_text(f"🔐 Paiement licence (120€ pour 2 mois) :\n{data['invoice_url']}")"
     else:
-        await update.message.reply_text(f"⚠️ Erreur lors de la génération du lien :\n{data}")
+        await update.message.reply_text(f"⚠️ Erreur lors de la génération du lien :\n{data}")"
 
 # 🔒 Boutons protégés
 async def handle_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -87,7 +87,7 @@ async def handle_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not user_licenses.get(user_id):
         await query.edit_message_text("❌ Tu dois acheter une licence pour accéder à cette option. Utilise /acheter 🚀")
         return
-    await query.edit_message_text(f"✅ Accès accordé à l’option : {query.data}")
+    await query.edit_message_text(f"✅ Accès accordé à l’option : {query.data}")"
 
 # 📢 Commande /broadcast
 ADMIN_IDS = [7478470461]  # Remplace par ton ID Telegram admin
@@ -112,7 +112,7 @@ async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             await context.bot.send_message(chat_id=user_id, text=message)
         except Exception as e:
-            logging.warning(f"Impossible d’envoyer à {user_id}: {e}")
+            logging.warning(f"Impossible d’envoyer à {user_id}: {e}")"
 
     await update.message.reply_text("✅ Message envoyé à tous les utilisateurs enregistrés.")
 
