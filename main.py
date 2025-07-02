@@ -1,5 +1,6 @@
 import logging
 import os
+import json
 from dotenv import load_dotenv
 load_dotenv()
 from datetime import datetime
@@ -18,6 +19,19 @@ NOWPAYMENTS_API_KEY = os.getenv("NOWPAYMENTS_API_KEY")
 user_licenses = {}
 user_credits = {}
 
+# ✅ Enregistre l’utilisateur dans users.json
+def save_user(user_id):
+    try:
+        with open("users.json", "r") as f:
+            users = json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        users = []
+
+    if user_id not in users:
+        users.append(user_id)
+        with open("users.json", "w") as f:
+            json.dump(users, f)
+
 # ⌨️ Menu principal
 def menu():
     return InlineKeyboardMarkup([
@@ -30,9 +44,11 @@ def menu():
 # 🟢 Commande /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
+    save_user(user.id)
+
     heure = datetime.now().strftime('%H:%M:%S')
     message = (
-        "🔷 Bienvenue sur LemonSpoofer\n\n"
+        "🔷 Bienvenue sur LemonSpoofer🍋\n\n"
         f"🟢 Statut : En ligne\n"
         f"🆔 ID : {user.id}\n"
         f"💰 Crédits : {user_credits.get(user.id, 0)}\n"
@@ -81,4 +97,5 @@ app.add_handler(CommandHandler("acheter", acheter))
 app.add_handler(CallbackQueryHandler(handle_buttons))
 
 if __name__ == "__main__":
+    app.bot.delete_webhook(drop_pending_updates=True)
     app.run_polling()
