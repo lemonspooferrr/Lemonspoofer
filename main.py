@@ -1,6 +1,7 @@
 import os
 import json
 import asyncio
+import aiohttp
 from datetime import datetime, timedelta
 from pathlib import Path
 from dotenv import load_dotenv
@@ -40,12 +41,6 @@ def main_menu(user_id):
         [InlineKeyboardButton("🛒 Acheter licence (120€)", callback_data="buy")],
         [InlineKeyboardButton("➕ Recharger crédits", callback_data="recharge")]
     ])
-        [InlineKeyboardButton("📞 Accès SIP", callback_data="sip")],
-        [InlineKeyboardButton("💬 Accès SMS", callback_data="sms")],
-        [InlineKeyboardButton("📲 Caller ID", callback_data="caller_id")],
-        [InlineKeyboardButton("🎵 Musique d’attente", callback_data="musique")],
-        [InlineKeyboardButton("➕ Recharger crédits", callback_data="recharge")]
-    ])
 
 # Start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -65,12 +60,18 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_data = users[uid]
     license_status = user_data['license_expiry'] or '❌ Non active'
     message = (
-        f"🔷 Bienvenue sur LemonSpoofer 🍋\n"
-        f"🕒 Heure: {time_str}\n"
-        f"🆔 ID: <code>{user.id}</code>\n"
-        f"👤 Nom: {user.first_name}\n"
-        f"💳 Crédits: {user_data['credits']}\n"
-        f"📅 Licence: {license_status}\n"
+        f"🔷 Bienvenue sur LemonSpoofer 🍋
+"
+        f"🕒 Heure: {time_str}
+"
+        f"🆔 ID: <code>{user.id}</code>
+"
+        f"👤 Nom: {user.first_name}
+"
+        f"💳 Crédits: {user_data['credits']}
+"
+        f"📅 Licence: {license_status}
+"
     )
     await update.message.reply_text(message, reply_markup=main_menu(uid), parse_mode="HTML")
 
@@ -83,10 +84,14 @@ async def admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
     total_credits = sum(u.get("credits", 0) for u in users.values())
     total_licenses = sum(1 for u in users.values() if u.get("license_expiry"))
     message = (
-        f"📊 Statistiques:\n"
-        f"👥 Utilisateurs: {total_users}\n"
-        f"💳 Crédits totaux: {total_credits}\n"
-        f"✅ Licences actives: {total_licenses}\n"
+        f"📊 Statistiques:
+"
+        f"👥 Utilisateurs: {total_users}
+"
+        f"💳 Crédits totaux: {total_credits}
+"
+        f"✅ Licences actives: {total_licenses}
+"
     )
     await update.message.reply_text(message)
 
@@ -127,9 +132,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return await query.edit_message_text("🚫 Licence requise pour utiliser cette option.")
         await query.edit_message_text(f"✅ Fonctionnalité {data} activée (simulation)")
 
-# Setup
-
-# 🔐 Commande /buy : Acheter une licence 2 mois (120€)
+# Buy command
 async def buy(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = str(update.effective_user.id)
     users = load_users()
@@ -141,7 +144,7 @@ async def buy(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "pay_currency": "usdttrc20",
             "order_id": user_id,
             "order_description": "Licence LemonSpoofer 2 mois",
-            "ipn_callback_url": "https://yourdomain.com/ipn"  # non utilisé ici
+            "ipn_callback_url": "https://yourdomain.com/ipn"
         }
         headers = {
             "x-api-key": NOWPAYMENTS_API_KEY,
@@ -157,6 +160,8 @@ async def buy(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
     else:
         await update.message.reply_text("❌ Erreur lors de la génération du lien de paiement.")
+
+# Start the app
 app = ApplicationBuilder().token(BOT_TOKEN).build()
 app.add_handler(CommandHandler("start", start))
 app.add_handler(CommandHandler("buy", buy))
@@ -164,3 +169,4 @@ app.add_handler(CommandHandler("admin", admin))
 app.add_handler(CommandHandler("broadcast", broadcast))
 app.add_handler(CallbackQueryHandler(handle_callback))
 app.run_polling()
+
