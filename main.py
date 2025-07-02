@@ -1,14 +1,12 @@
 import os
 import json
-import asyncio
 import aiohttp
 from datetime import datetime, timedelta
-from pathlib import Path
 from dotenv import load_dotenv
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import (
     ApplicationBuilder, CommandHandler, CallbackQueryHandler,
-    MessageHandler, ContextTypes, filters
+    ContextTypes, filters
 )
 
 # Load environment variables
@@ -17,22 +15,22 @@ BOT_TOKEN = os.getenv("BOT_TOKEN")
 ADMIN_ID = int(os.getenv("ADMIN_ID"))
 NOWPAYMENTS_API_KEY = os.getenv("NOWPAYMENTS_API_KEY")
 
-# Init user DB
-if not Path("users.json").exists():
-    with open("users.json", "w") as f:
+# Load/save user database
+USERS_FILE = "users.json"
+if not os.path.exists(USERS_FILE):
+    with open(USERS_FILE, "w") as f:
         json.dump({}, f)
 
-# Load/save functions
 def load_users():
-    with open("users.json", "r") as f:
+    with open(USERS_FILE, "r") as f:
         return json.load(f)
 
-def save_users(users):
-    with open("users.json", "w") as f:
-        json.dump(users, f, indent=2)
+def save_users(data):
+    with open(USERS_FILE, "w") as f:
+        json.dump(data, f, indent=2)
 
 # Main menu
-def main_menu(user_id):
+def main_menu():
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("📞 Accès SIP", callback_data="sip")],
         [InlineKeyboardButton("💬 Accès SMS", callback_data="sms")],
@@ -57,18 +55,22 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         save_users(users)
 
     time_str = datetime.now().strftime('%H:%M:%S')
-    user_data = users[uid]
-    license_status = user_data['license_expiry'] or '❌ Inactive'
+    license_status = users[uid]['license_expiry'] or '❌ Inactive'
     msg = (
-        f"👋 Bienvenue {user.first_name} !\n"
-        f"🆔 ID: <code>{user.id}</code>\n"
-        f"💵 Crédits : {user_data['credits']}\n"
-        f"📅 Licence : {license_status}\n"
+        f"👋 Bienvenue {user.first_name} !
+
+"
+        f"🆔 ID : <code>{user.id}</code>
+"
+        f"💳 Crédits : {users[uid]['credits']}
+"
+        f"📅 Licence : {license_status}
+"
         f"🕒 Heure : {time_str}"
     )
-    await update.message.reply_text(msg, parse_mode="HTML", reply_markup=main_menu(uid))
+    await update.message.reply_text(msg, reply_markup=main_menu(), parse_mode="HTML")
 
-# Admin
+# Admin Stats
 async def admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID:
         return await update.message.reply_text("⛔ Accès refusé")
@@ -76,13 +78,16 @@ async def admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
     total_users = len(users)
     total_credits = sum(u.get("credits", 0) for u in users.values())
     total_licenses = sum(1 for u in users.values() if u.get("license_expiry"))
-    message = (
-        f"📊 Statistiques:\n"
-        f"👥 Utilisateurs: {total_users}\n"
-        f"💳 Crédits totaux: {total_credits}\n"
-        f"✅ Licences actives: {total_licenses}"
+    msg = (
+        "📊 Statistiques :
+"
+        f"👥 Utilisateurs : {total_users}
+"
+        f"💰 Crédits totaux : {total_credits}
+"
+        f"✅ Licences actives : {total_licenses}"
     )
-    await update.message.reply_text(message)
+    await update.message.reply_text(msg)
 
 # Broadcast
 async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -90,7 +95,7 @@ async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return await update.message.reply_text("⛔ Accès refusé")
     msg = ' '.join(context.args)
     if not msg:
-        return await update.message.reply_text("❗ Utilise: /broadcast Votre message")
+        return await update.message.reply_text("❗ Utilise: /broadcast Votre message ici")
     users = load_users()
     for uid in users:
         try:
@@ -99,7 +104,7 @@ async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
             pass
     await update.message.reply_text("✅ Message envoyé")
 
-# Achat licence
+# Buy Licence
 async def buy(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = str(update.effective_user.id)
     async with aiohttp.ClientSession() as session:
@@ -108,8 +113,7 @@ async def buy(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "price_currency": "eur",
             "pay_currency": "usdttrc20",
             "order_id": user_id,
-            "order_description": "Licence LemonSpoofer 2 mois",
-            "ipn_callback_url": "https://yourdomain.com/ipn"
+            "order_description": "Licence LemonSpoofer 2 mois"
         }
         headers = {
             "x-api-key": NOWPAYMENTS_API_KEY,
@@ -118,40 +122,59 @@ async def buy(update: Update, context: ContextTypes.DEFAULT_TYPE):
         async with session.post("https://api.nowpayments.io/v1/invoice", json=body, headers=headers) as resp:
             data = await resp.json()
             invoice_url = data.get("invoice_url")
+            if invoice_url:
+                await update.callback_query.message.reply_text(f"🔐 Paiement ici : {invoice_url}")
+            else:
+                await update.callback_query.message.reply_text("❌ Erreur de paiement")
 
-    if invoice_url:
-        await update.message.reply_text(
-            f"🔐 Clique ici pour acheter ta licence 2 mois (120€):\n{invoice_url}"
-        )
-    else:
-        await update.message.reply_text("❌ Erreur lors de la génération du lien de paiement.")
+# Recharge crédits
+async def recharge(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = str(update.effective_user.id)
+    async with aiohttp.ClientSession() as session:
+        body = {
+            "price_amount": 5,
+            "price_currency": "eur",
+            "pay_currency": "usdttrc20",
+            "order_id": user_id,
+            "order_description": "Recharge crédits LemonSpoofer"
+        }
+        headers = {
+            "x-api-key": NOWPAYMENTS_API_KEY,
+            "Content-Type": "application/json"
+        }
+        async with session.post("https://api.nowpayments.io/v1/invoice", json=body, headers=headers) as resp:
+            data = await resp.json()
+            invoice_url = data.get("invoice_url")
+            if invoice_url:
+                await update.callback_query.message.reply_text(
+                    "💸 Recharge tes crédits ici:",
+                    reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔗 Payer maintenant", url=invoice_url)]])
+                )
+            else:
+                await update.callback_query.message.reply_text("❌ Erreur de paiement")
 
 # Callback
 async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    user_id = str(query.from_user.id)
-    users = load_users()
-    data = query.data
     await query.answer()
+    data = query.data
+    users = load_users()
+    uid = str(query.from_user.id)
+    user_data = users.get(uid, {})
+    license_ok = user_data.get("license_expiry")
 
     if data == "buy":
         return await buy(update, context)
-
-    if data == "recharge":
-        payment_url = f"https://nowpayments.io/payment/?api_key={NOWPAYMENTS_API_KEY}&price_amount=5&price_currency=eur&order_id={user_id}"
-        await query.edit_message_text("💸 Recharge tes crédits ici:", reply_markup=InlineKeyboardMarkup([
-            [InlineKeyboardButton("🔗 Payer maintenant", url=payment_url)]
-        ]))
+    elif data == "recharge":
+        return await recharge(update, context)
     elif data in ["sip", "sms", "caller_id", "musique"]:
-        license_ok = users[user_id].get("license_expiry")
         if not license_ok:
-            return await query.edit_message_text("🚫 Licence requise pour utiliser cette option.")
-        await query.edit_message_text(f"✅ Fonctionnalité {data} activée (simulation)")
+            return await query.message.reply_text("🚫 Licence requise pour utiliser cette option.")
+        await query.message.reply_text(f"✅ Fonctionnalité {data} activée (simulation)")
 
-# Run bot
+# Run app
 app = ApplicationBuilder().token(BOT_TOKEN).build()
 app.add_handler(CommandHandler("start", start))
-app.add_handler(CommandHandler("buy", buy))
 app.add_handler(CommandHandler("admin", admin))
 app.add_handler(CommandHandler("broadcast", broadcast))
 app.add_handler(CallbackQueryHandler(handle_callback))
