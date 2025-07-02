@@ -48,11 +48,18 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     heure = datetime.now().strftime('%H:%M:%S')
     message = (
-        "🔷 Bienvenue sur LemonSpoofer🍋\n\n"
-        f"🟢 Statut : En ligne\n"
-        f"🆔 ID : {user.id}\n"
-        f"💰 Crédits : {user_credits.get(user.id, 0)}\n"
-        f"🕒 Heure : {heure}\n\n"
+        "🔷 Bienvenue sur LemonSpoofer🍋
+
+"
+        f"🟢 Statut : En ligne
+"
+        f"🆔 ID : {user.id}
+"
+        f"💰 Crédits : {user_credits.get(user.id, 0)}
+"
+        f"🕒 Heure : {heure}
+
+"
         "Utilise /acheter pour obtenir ta licence. 🚀"
     )
     await update.message.reply_text(message, reply_markup=menu())
@@ -76,9 +83,11 @@ async def acheter(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if "invoice_url" in data:
         url = data["invoice_url"]
-        await update.message.reply_text(f"🔐 Paiement licence (120€ pour 2 mois) :\n{url}")
+        await update.message.reply_text(f"🔐 Paiement licence (120€ pour 2 mois) :
+{url}")
     else:
-        await update.message.reply_text(f"⚠️ Erreur lors de la génération du lien :\n{data}")
+        await update.message.reply_text(f"⚠️ Erreur lors de la génération du lien :
+{data}")
 
 # 🔒 Boutons protégés
 async def handle_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -86,13 +95,14 @@ async def handle_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = query.from_user.id
     await query.answer()
     if not user_licenses.get(user_id):
-        await query.edit_message_text("❌ Tu dois acheter une licence pour accéder à cette option.\nUtilise /acheter 🚀")
+        await query.edit_message_text("❌ Tu dois acheter une licence pour accéder à cette option.
+Utilise /acheter 🚀")
         return
     await query.edit_message_text(f"✅ Accès accordé à l’option : {query.data}")
 
 # 📣 Commande /broadcast (admin uniquement)
 async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    admin_id = 7478470461  # Remplace avec ton ID
+    admin_id = 7478470461  # Ton ID Telegram
     sender_id = update.effective_user.id
 
     if sender_id != admin_id:
