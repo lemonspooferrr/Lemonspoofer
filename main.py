@@ -169,12 +169,34 @@ async def check_payments(app):
                             save("credits.json", credits)
 
 # ▶️ Lancement principal
+
+
+# 📣 Commande /broadcast (admin uniquement)
+async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != ADMIN_ID:
+        await update.message.reply_text("⛔️ Commande réservée à l’administrateur.")
+        return
+
+    if not context.args:
+        await update.message.reply_text("Utilisation : /broadcast Votre message ici")
+        return
+
+    message = "🔔 Message global :\n" + " ".join(context.args)
+    users = load("users.json")
+
+    for uid in users.keys():
+        try:
+            await context.bot.send_message(chat_id=int(uid), text=message)
+        except Exception as e:
+            logging.warning(f"Échec envoi à {uid}: {e}")
+    await update.message.reply_text("✅ Message envoyé à tous les utilisateurs.")
 async def main():
     app = ApplicationBuilder().token(BOT_TOKEN).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("acheter", acheter))
     app.add_handler(CommandHandler("recharger", recharger))
     app.add_handler(CallbackQueryHandler(callback_handler))
+    app.add_handler(CommandHandler("broadcast", broadcast))
     asyncio.create_task(check_payments(app))
     await app.run_polling()
 
