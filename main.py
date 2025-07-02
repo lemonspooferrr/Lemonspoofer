@@ -2,11 +2,12 @@ import logging
 import os
 import json
 from dotenv import load_dotenv
-load_dotenv()
 from datetime import datetime
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, ContextTypes
 import aiohttp
+
+load_dotenv()
 
 # 🔐 Logs
 logging.basicConfig(level=logging.INFO)
@@ -45,26 +46,18 @@ def menu():
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     save_user(user.id)
-
     heure = datetime.now().strftime('%H:%M:%S')
     message = (
-        "🔷 Bienvenue sur LemonSpoofer🍋
-
-"
-        f"🟢 Statut : En ligne
-"
-        f"🆔 ID : {user.id}
-"
-        f"💰 Crédits : {user_credits.get(user.id, 0)}
-"
-        f"🕒 Heure : {heure}
-
-"
+        "🔷 Bienvenue sur LemonSpoofer🍋\n\n"
+        f"🟢 Statut : En ligne\n"
+        f"🆔 ID : {user.id}\n"
+        f"💰 Crédits : {user_credits.get(user.id, 0)}\n"
+        f"🕒 Heure : {heure}\n\n"
         "Utilise /acheter pour obtenir ta licence. 🚀"
     )
     await update.message.reply_text(message, reply_markup=menu())
 
-# 💳 Commande /acheter (paiement crypto 120 € via NOWPayments)
+# 💳 Commande /acheter
 async def acheter(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = str(update.effective_user.id)
     uid = f"{user_id}_{datetime.now().timestamp()}"
@@ -82,12 +75,9 @@ async def acheter(update: Update, context: ContextTypes.DEFAULT_TYPE):
             data = await resp.json()
 
     if "invoice_url" in data:
-        url = data["invoice_url"]
-        await update.message.reply_text(f"🔐 Paiement licence (120€ pour 2 mois) :
-{url}")
+        await update.message.reply_text(f"🔐 Paiement licence (120€ pour 2 mois) :\n{data['invoice_url']}")
     else:
-        await update.message.reply_text(f"⚠️ Erreur lors de la génération du lien :
-{data}")
+        await update.message.reply_text(f"⚠️ Erreur lors de la génération du lien :\n{data}")
 
 # 🔒 Boutons protégés
 async def handle_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -95,41 +85,36 @@ async def handle_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = query.from_user.id
     await query.answer()
     if not user_licenses.get(user_id):
-        await query.edit_message_text("❌ Tu dois acheter une licence pour accéder à cette option.
-Utilise /acheter 🚀")
+        await query.edit_message_text("❌ Tu dois acheter une licence pour accéder à cette option. Utilise /acheter 🚀")
         return
     await query.edit_message_text(f"✅ Accès accordé à l’option : {query.data}")
 
-# 📣 Commande /broadcast (admin uniquement)
+# 📢 Commande /broadcast
+ADMIN_IDS = [7478470461]  # Remplace par ton ID Telegram admin
+
 async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    admin_id = 7478470461  # Ton ID Telegram
-    sender_id = update.effective_user.id
-
-    if sender_id != admin_id:
-        await update.message.reply_text("⛔ Tu n'es pas autorisé à utiliser cette commande.")
-        return
-
-    if context.args:
-        message_to_send = " ".join(context.args)
-    else:
-        await update.message.reply_text("⚠️ Utilisation : /broadcast Votre message ici")
+    if update.effective_user.id not in ADMIN_IDS:
+        await update.message.reply_text("❌ Tu n'es pas autorisé à utiliser cette commande.")
         return
 
     try:
         with open("users.json", "r") as f:
             users = json.load(f)
-    except:
+    except (FileNotFoundError, json.JSONDecodeError):
         users = []
 
-    count = 0
+    if not context.args:
+        await update.message.reply_text("❌ Utilisation : /broadcast [message]")
+        return
+
+    message = "📢 " + " ".join(context.args)
     for user_id in users:
         try:
-            await context.bot.send_message(chat_id=user_id, text=message_to_send)
-            count += 1
+            await context.bot.send_message(chat_id=user_id, text=message)
         except Exception as e:
             logging.warning(f"Impossible d’envoyer à {user_id}: {e}")
 
-    await update.message.reply_text(f"✅ Message envoyé à {count} utilisateur(s).")
+    await update.message.reply_text("✅ Message envoyé à tous les utilisateurs enregistrés.")
 
 # ▶️ Lancer le bot
 app = ApplicationBuilder().token(BOT_TOKEN).build()
@@ -141,3 +126,4 @@ app.add_handler(CallbackQueryHandler(handle_buttons))
 if __name__ == "__main__":
     app.bot.delete_webhook(drop_pending_updates=True)
     app.run_polling()
+
