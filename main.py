@@ -90,10 +90,42 @@ async def handle_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     await query.edit_message_text(f"✅ Accès accordé à l’option : {query.data}")
 
+# 📣 Commande /broadcast (admin uniquement)
+async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    admin_id = 7478470461  # Remplace avec ton ID
+    sender_id = update.effective_user.id
+
+    if sender_id != admin_id:
+        await update.message.reply_text("⛔ Tu n'es pas autorisé à utiliser cette commande.")
+        return
+
+    if context.args:
+        message_to_send = " ".join(context.args)
+    else:
+        await update.message.reply_text("⚠️ Utilisation : /broadcast Votre message ici")
+        return
+
+    try:
+        with open("users.json", "r") as f:
+            users = json.load(f)
+    except:
+        users = []
+
+    count = 0
+    for user_id in users:
+        try:
+            await context.bot.send_message(chat_id=user_id, text=message_to_send)
+            count += 1
+        except Exception as e:
+            logging.warning(f"Impossible d’envoyer à {user_id}: {e}")
+
+    await update.message.reply_text(f"✅ Message envoyé à {count} utilisateur(s).")
+
 # ▶️ Lancer le bot
 app = ApplicationBuilder().token(BOT_TOKEN).build()
 app.add_handler(CommandHandler("start", start))
 app.add_handler(CommandHandler("acheter", acheter))
+app.add_handler(CommandHandler("broadcast", broadcast))
 app.add_handler(CallbackQueryHandler(handle_buttons))
 
 if __name__ == "__main__":
