@@ -150,16 +150,16 @@ async def admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
     last_user = users[-1] if isinstance(users, list) and users else "N/A"
 
     msg = (
-        f"📊 <b>Statistiques LemonSpoofer</b>
+        f"📊 <b>Statistiques LemonSpoofer</b>"
 
 "
-        f"👥 Utilisateurs : <b>{total_users}</b>
+        f"👥 Utilisateurs : <b>{total_users}</b>"
 "
-        f"💳 Crédits totaux : <b>{total_credits}</b>
+        f"💳 Crédits totaux : <b>{total_credits}</b>"
 "
-        f"🔑 Licences actives : <b>{total_licenses}</b>
+        f"🔑 Licences actives : <b>{total_licenses}</b>"
 "
-        f"📌 Dernier inscrit : <b>{last_user}</b>
+        f"📌 Dernier inscrit : <b>{last_user}</b>"
 "
     )
 
