@@ -1,114 +1,66 @@
+import logging
 import os
 import json
-import asyncio
-import logging
-from pathlib import Path
-from datetime import datetime
-import aiohttp
 from dotenv import load_dotenv
+from datetime import datetime
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
-from telegram.ext import (
-    ApplicationBuilder, CommandHandler, CallbackQueryHandler,
-    MessageHandler, ContextTypes, filters
-)
+from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, ContextTypes
+import aiohttp
 
-# 🔐 Chargement des variables .env
 load_dotenv()
-BOT_TOKEN = os.getenv("BOT_TOKEN")
-ADMIN_ID = int(os.getenv("ADMIN_ID"))
+
+# 🔐 Logs
+logging.basicConfig(level=logging.INFO)
+
+# 🔧 Clé API et Token
+BOT_TOKEN = os.getenv("TOKEN")
 NOWPAYMENTS_API_KEY = os.getenv("NOWPAYMENTS_API_KEY")
 
-# 📁 Initialisation des fichiers
-for f in ["users.json", "credits.json", "licenses.json"]:
-    if not Path(f).exists():
-        with open(f, "w") as file:
-            json.dump({}, file)
+# 📌 Utilisateurs
+user_licenses = {}
+user_credits = {}
 
-# 📦 Utilitaires JSON
-def load(file): return json.load(open(file, "r"))
-def save(file, data): json.dump(data, open(file, "w"), indent=2)
+# ✅ Enregistre l’utilisateur dans users.json
+def save_user(user_id):
+    try:
+        with open("users.json", "r") as f:
+            users = json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        users = []
 
-# 📋 Menu principal
-def main_menu():
+    if user_id not in users:
+        users.append(user_id)
+        with open("users.json", "w") as f:
+            json.dump(users, f)
+
+# ⌨️ Menu principal
+def menu():
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("📞 Accès SIP", callback_data="sip"),
-         InlineKeyboardButton("💬 SMS Sender", callback_data="sms")],
-        [InlineKeyboardButton("🆔 Caller ID", callback_data="caller"),
-         InlineKeyboardButton("🎵 Musique", callback_data="musique")],
-        [InlineKeyboardButton("💳 Recharger", callback_data="recharger"),
-         InlineKeyboardButton("📊 Admin", callback_data="admin")]
+        [InlineKeyboardButton("📞 Accès SIP", callback_data="sip"), InlineKeyboardButton("💳 Recharger", callback_data="recharger")],
+        [InlineKeyboardButton("🆔 Caller ID", callback_data="caller_id"), InlineKeyboardButton("🎵 Musique d’attente", callback_data="musique")],
+        [InlineKeyboardButton("💬 SMS Sender", callback_data="sms"), InlineKeyboardButton("📧 Mail Sender", callback_data="mail")],
+        [InlineKeyboardButton("⚙️ Paramètres", callback_data="parametres")]
     ])
 
-# 🟢 /start
+# 🟢 Commande /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
-    users = load("users.json")
-    credits = load("credits.json")
-    licenses = load("licenses.json")
-
-    uid = str(user.id)
-    if uid not in users:
-        users[uid] = {
-            "username": user.username,
-            "first_name": user.first_name,
-            "date": datetime.now().isoformat()
-        }
-        save("users.json", users)
-    if uid not in credits:
-        credits[uid] = 0
-        save("credits.json", credits)
-
-    heure = datetime.now().strftime("%H:%M:%S")
-    msg = (
-        f"🔷 Bienvenue sur LemonSpoofer 🍋
-
-"
-        f"🟢 Statut : En ligne
-"
-        f"🆔 ID : <code>{user.id}</code>
-"
-        f"💰 Crédits : {credits[uid]}
-"
-        f"🔑 Licence : {'✅ Active' if uid in licenses else '❌ Inactive'}
-"
-        f"🕒 Heure : {heure}
-
-"
-        f"Utilise /acheter pour la licence. 🚀"
+    save_user(user.id)
+    heure = datetime.now().strftime('%H:%M:%S')
+    message = (
+        "🔷 Bienvenue sur LemonSpoofer🍋\n\n"
+        f"🟢 Statut : En ligne\n"
+        f"🆔 ID : {user.id}\n"
+        f"💰 Crédits : {user_credits.get(user.id, 0)}\n"
+        f"🕒 Heure : {heure}\n\n"
+        "Utilise /acheter pour obtenir ta licence. 🚀"
     )
-    await update.message.reply_text(msg, parse_mode="HTML", reply_markup=main_menu())
+    await update.message.reply_text(message, reply_markup=menu())
 
-# 🧾 Callback boutons
-async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    uid = str(query.from_user.id)
-    licenses = load("licenses.json")
-    if query.data == "admin":
-        if uid != str(ADMIN_ID):
-            await query.edit_message_text("⛔ Accès refusé.")
-            return
-        users = load("users.json")
-        credits = load("credits.json")
-        stats = (
-            f"📊 Statistiques :
-"
-            f"👥 Utilisateurs : {len(users)}
-"
-            f"🔐 Licences : {len(load('licenses.json'))}
-"
-            f"💰 Crédits totaux : {sum(credits.values())}"
-        )
-        await query.edit_message_text(stats)
-    elif uid not in licenses:
-        await query.edit_message_text("❌ Tu n’as pas de licence active. Utilise /acheter.")
-    else:
-        await query.edit_message_text(f"✅ Accès accordé à : {query.data}")
-
-# 💳 /acheter licence 120€
+# 💳 Commande /acheter
 async def acheter(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    uid = str(update.effective_user.id)
-    headers = {"x-api-key": NOWPAYMENTS_API_KEY, "Content-Type": "application/json"}
+    user_id = str(update.effective_user.id)
+    uid = f"{user_id}_{datetime.now().timestamp()}"
     body = {
         "price_amount": 120,
         "price_currency": "eur",
@@ -117,89 +69,101 @@ async def acheter(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "order_id": uid,
         "order_description": "Licence 2 mois LemonSpoofer"
     }
+    headers = {"x-api-key": NOWPAYMENTS_API_KEY}
     async with aiohttp.ClientSession() as session:
-        async with session.post("https://api.nowpayments.io/v1/invoice", headers=headers, json=body) as resp:
-            res = await resp.json()
-            if "invoice_url" in res:
-                await update.message.reply_text(f"🔗 Paiement licence : {res['invoice_url']}")
-            else:
-                await update.message.reply_text("❌ Erreur lors du paiement.")
+        async with session.post("https://api.nowpayments.io/v1/invoice", json=body, headers=headers) as resp:
+            data = await resp.json()
 
-# 💰 /recharger crédits 5€
-async def recharger(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    uid = str(update.effective_user.id)
-    headers = {"x-api-key": NOWPAYMENTS_API_KEY, "Content-Type": "application/json"}
-    body = {
-        "price_amount": 5,
-        "price_currency": "eur",
-        "pay_currency": "usdttrc20",
-        "ipn_callback_url": "https://nowpayments.io",
-        "order_id": uid,
-        "order_description": "Recharge crédits LemonSpoofer"
-    }
-    async with aiohttp.ClientSession() as session:
-        async with session.post("https://api.nowpayments.io/v1/invoice", headers=headers, json=body) as resp:
-            res = await resp.json()
-            if "invoice_url" in res:
-                await update.message.reply_text(f"🔗 Paiement recharge : {res['invoice_url']}")
-            else:
-                await update.message.reply_text("❌ Erreur NOWPayments.")
+    if "invoice_url" in data:
+        await update.message.reply_text(f"🔐 Paiement licence (120€ pour 2 mois) :\n{data['invoice_url']}")
+    else:
+        await update.message.reply_text(f"⚠️ Erreur lors de la génération du lien :\n{data}")
 
-# 📡 Vérification automatique paiements (simulation basique)
-async def check_payments(app):
-    while True:
-        await asyncio.sleep(30)
-        async with aiohttp.ClientSession() as session:
-            headers = {"x-api-key": NOWPAYMENTS_API_KEY}
-            async with session.get("https://api.nowpayments.io/v1/payment") as resp:
-                res = await resp.json()
-                for tx in res.get("data", []):
-                    if tx["payment_status"] == "finished":
-                        uid = tx["order_id"]
-                        if "licence" in tx["order_description"].lower():
-                            licenses = load("licenses.json")
-                            licenses[uid] = {
-                                "activated": datetime.now().isoformat(),
-                                "expires": "2 mois"
-                            }
-                            save("licenses.json", licenses)
-                        elif "recharge" in tx["order_description"].lower():
-                            credits = load("credits.json")
-                            credits[uid] = credits.get(uid, 0) + 500
-                            save("credits.json", credits)
-
-# ▶️ Lancement principal
-
-
-# 📣 Commande /broadcast (admin uniquement)
-async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id != ADMIN_ID:
-        await update.message.reply_text("⛔️ Commande réservée à l’administrateur.")
+# 🔒 Boutons protégés
+async def handle_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    user_id = query.from_user.id
+    await query.answer()
+    if not user_licenses.get(user_id):
+        await query.edit_message_text("❌ Tu dois acheter une licence pour accéder à cette option. Utilise /acheter 🚀")
         return
+    await query.edit_message_text(f"✅ Accès accordé à l’option : {query.data}")
+
+# 📢 Commande /broadcast
+ADMIN_IDS = [7478470461]  # Remplace par ton ID Telegram admin
+
+async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id not in ADMIN_IDS:
+        await update.message.reply_text("❌ Tu n'es pas autorisé à utiliser cette commande.")
+        return
+
+    try:
+        with open("users.json", "r") as f:
+            users = json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        users = []
 
     if not context.args:
-        await update.message.reply_text("Utilisation : /broadcast Votre message ici")
+        await update.message.reply_text("❌ Utilisation : /broadcast [message]")
         return
 
-    message = "🔔 Message global :\n" + " ".join(context.args)
-    users = load("users.json")
-
-    for uid in users.keys():
+    message = "📢 " + " ".join(context.args)
+    for user_id in users:
         try:
-            await context.bot.send_message(chat_id=int(uid), text=message)
+            await context.bot.send_message(chat_id=user_id, text=message)
         except Exception as e:
-            logging.warning(f"Échec envoi à {uid}: {e}")
-    await update.message.reply_text("✅ Message envoyé à tous les utilisateurs.")
-async def main():
-    app = ApplicationBuilder().token(BOT_TOKEN).build()
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("acheter", acheter))
-    app.add_handler(CommandHandler("recharger", recharger))
-    app.add_handler(CallbackQueryHandler(callback_handler))
-    app.add_handler(CommandHandler("broadcast", broadcast))
-    asyncio.create_task(check_payments(app))
-    await app.run_polling()
+            logging.warning(f"Impossible d’envoyer à {user_id}: {e}")
+
+    await update.message.reply_text("✅ Message envoyé à tous les utilisateurs enregistrés.")
+
+# ▶️ Lancer le bot
+app = ApplicationBuilder().token(BOT_TOKEN).build()
+app.add_handler(CommandHandler("start", start))
+app.add_handler(CommandHandler("acheter", acheter))
+app.add_handler(CommandHandler("broadcast", broadcast))
+app.add_handler(CallbackQueryHandler(handle_buttons))
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)
-    asyncio.run(main())
+    app.bot.delete_webhook(drop_pending_updates=True)
+    app.run_polling()
+
+# 🧠 Admin Commande
+from telegram.constants import ParseMode
+
+ADMIN_ID = os.getenv("ADMIN_ID")
+
+async def admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = str(update.effective_user.id)
+    if user_id != ADMIN_ID:
+        await update.message.reply_text("🚫 Accès réservé à l'administrateur.")
+        return
+
+    try:
+        with open("users.json", "r") as f:
+            users = json.load(f)
+        total_users = len(users) if isinstance(users, list) else len(users.values())
+    except:
+        total_users = 0
+
+    total_credits = sum(user_credits.get(str(uid), 0) for uid in users) if isinstance(users, list) else 0
+    total_licenses = sum(1 for uid in users if user_licenses.get(str(uid))) if isinstance(users, list) else 0
+    last_user = users[-1] if isinstance(users, list) and users else "N/A"
+
+    msg = (
+        f"📊 <b>Statistiques LemonSpoofer</b>
+
+"
+        f"👥 Utilisateurs : <b>{total_users}</b>
+"
+        f"💳 Crédits totaux : <b>{total_credits}</b>
+"
+        f"🔑 Licences actives : <b>{total_licenses}</b>
+"
+        f"📌 Dernier inscrit : <b>{last_user}</b>
+"
+    )
+
+    await update.message.reply_text(msg, parse_mode=ParseMode.HTML)
+
+application.add_handler(CommandHandler('admin', admin))
+
