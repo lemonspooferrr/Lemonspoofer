@@ -86,12 +86,14 @@ async def recharge(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "📩 Puis clique sur '✅ J’ai payé' ou contacte @LemonSupportSL."
     )
     log_action(update.effective_user, 'Recharge demandée')
+    await context.bot.send_message(chat_id=ADMIN_ID, text=f'🔄 Recharge demandée par @{update.effective_user.username} ({update.effective_user.id})')
     await update.callback_query.message.reply_text(msg, parse_mode="HTML")
 
 async def paid_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     log_action(user, '/start command')
     log_action(update.effective_user, '✅ J’ai payé')
+    await context.bot.send_message(chat_id=ADMIN_ID, text=f'🚨 Paiement signalé par @{update.effective_user.username} ({update.effective_user.id})')
     await update.callback_query.message.reply_text("🕵️ Paiement reçu ou en attente de validation. Tu seras notifié sous peu.")
     await context.bot.send_message(
         chat_id=ADMIN_ID,
@@ -105,6 +107,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if data == "buy":
         log_action(update.effective_user, 'Ouverture menu achat licence')
+        await context.bot.send_message(chat_id=ADMIN_ID, text=f'🛒 Menu achat ouvert par @{update.effective_user.username} ({update.effective_user.id})')
         return await buy(update, context)
     if data == "paid":
         return await paid_callback(update, context)
@@ -117,6 +120,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not users.get(uid, {}).get("license_expiry"):
             return await query.edit_message_text("🚫 Licence requise pour utiliser cette option.")
         log_action(update.effective_user, f'Utilisation fonction : {data}')
+        await context.bot.send_message(chat_id=ADMIN_ID, text=f'📲 @{update.effective_user.username} ({update.effective_user.id}) a utilisé : {data}')
         await query.edit_message_text(f"✅ Fonctionnalité {data} activée (simulation)")
 
 
@@ -151,6 +155,7 @@ async def activate_license(update: Update, context: ContextTypes.DEFAULT_TYPE):
         users[uid]["license_expiry"] = expiry_date
         save_users(users)
         log_action(update.effective_user, f"/active {uid} {days} jours")
+        await context.bot.send_message(chat_id=ADMIN_ID, text=f'🔓 Licence activée pour {uid} ({days} jours)')
         await update.message.reply_text(f"✅ Licence activée pour l'utilisateur {uid} jusqu’au {expiry_date}.")
     except:
         await update.message.reply_text("❗ Utilisation : /active <id> [jours]")
@@ -167,13 +172,47 @@ async def add_credits(update: Update, context: ContextTypes.DEFAULT_TYPE):
         users[uid]["credits"] += amount
         save_users(users)
         log_action(update.effective_user, f"/credits {uid} +{amount}")
+        await context.bot.send_message(chat_id=ADMIN_ID, text=f'💰 Crédit ajouté : {uid} (+{amount})')
         await update.message.reply_text(f"✅ {amount} crédits ajoutés à l’utilisateur {uid}.")
     except:
         await update.message.reply_text("❗ Utilisation : /credits <id> <montant>")
 
+
+async def admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != ADMIN_ID:
+        return await update.message.reply_text("⛔ Accès refusé")
+    users = load_users()
+    total_users = len(users)
+    total_credits = sum(u.get("credits", 0) for u in users.values())
+    total_licenses = sum(1 for u in users.values() if u.get("license_expiry"))
+    msg = (
+        f"📊 Statistiques :\n"
+        f"👥 Utilisateurs : {total_users}\n"
+        f"💰 Crédits totaux : {total_credits}\n"
+        f"✅ Licences actives : {total_licenses}"
+    )
+    log_action(update.effective_user, "/admin consulté")
+    await update.message.reply_text(msg)
+
+
+
+async def logs(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != ADMIN_ID:
+        return await update.message.reply_text("⛔ Accès refusé")
+    try:
+        with open("logs.txt", "r", encoding="utf-8") as f:
+            lines = f.readlines()[-10:]
+            content = "".join(lines)
+        await update.message.reply_text(f"📝 Derniers logs :\n\n<code>{content}</code>", parse_mode="HTML")
+    except Exception as e:
+        await update.message.reply_text("❌ Impossible de lire les logs.")
+
+
 # Appel bot
 app = ApplicationBuilder().token(BOT_TOKEN).build()
 app.add_handler(CommandHandler("start", start))
+app.add_handler(CommandHandler("admin", admin))
+app.add_handler(CommandHandler("logs", logs))
 app.add_handler(CommandHandler("active", activate_license))
 app.add_handler(CommandHandler("credits", add_credits))
 app.add_handler(CallbackQueryHandler(handle_callback))
