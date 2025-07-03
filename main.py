@@ -100,7 +100,7 @@ async def buy(update: Update, context: ContextTypes.DEFAULT_TYPE):
         body = {
             "price_amount": 120,
             "price_currency": "eur",
-            "pay_currency": "usdttrc20",
+            "pay_currency": "btc",
             "order_id": user_id,
             "order_description": "Licence LemonSpoofer 2 mois"
         }
