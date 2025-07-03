@@ -208,11 +208,54 @@ async def logs(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❌ Impossible de lire les logs.")
 
 
+
+async def help(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    msg = (
+        "📖 <b>Aide LemonSpoofer</b>\n\n"
+        "🛠️ <b>Fonctionnalités disponibles :</b>\n"
+        "📞 <b>Accès SIP</b> – Fonction VoIP\n"
+        "💬 <b>Accès SMS</b> – Envoi de SMS via spoof\n"
+        "📲 <b>Caller ID</b> – Modifier ton numéro d’appel\n"
+        "🎵 <b>Musique d’attente</b> – Personnalisation\n\n"
+        "🪪 <b>Licence :</b> Obligatoire pour utiliser les fonctionnalités.\n"
+        "🔓 Pour acheter, clique sur 🛒 Acheter licence.\n"
+        "⚠️ Tu peux payer via BTC, SOLANA ou ETH.\n\n"
+        "💳 <b>Crédits :</b> Utiles pour certaines actions. Recharge via ➕ Recharger crédits.\n"
+        "✅ Clique sur “J’ai payé” pour alerter un admin après paiement.\n\n"
+        "📩 Besoin d’aide ? Contacte : @LemonSupportSL"
+    )
+    await update.message.reply_text(msg, parse_mode="HTML")
+
+
+
+async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != ADMIN_ID:
+        return await update.message.reply_text("⛔ Accès refusé")
+
+    msg = ' '.join(context.args)
+    if not msg:
+        return await update.message.reply_text("❗ Utilise: /broadcast Votre message")
+
+    users = load_users()
+    sent = 0
+    for uid in users:
+        try:
+            await context.bot.send_message(chat_id=int(uid), text=msg)
+            sent += 1
+        except:
+            continue
+
+    log_action(update.effective_user, f"/broadcast envoyé à {sent} utilisateurs")
+    await update.message.reply_text(f"✅ Message envoyé à {sent} utilisateurs.")
+
+
 # Appel bot
 app = ApplicationBuilder().token(BOT_TOKEN).build()
 app.add_handler(CommandHandler("start", start))
 app.add_handler(CommandHandler("admin", admin))
 app.add_handler(CommandHandler("logs", logs))
+app.add_handler(CommandHandler("help", help))
+app.add_handler(CommandHandler("broadcast", broadcast))
 app.add_handler(CommandHandler("active", activate_license))
 app.add_handler(CommandHandler("credits", add_credits))
 app.add_handler(CallbackQueryHandler(handle_callback))
