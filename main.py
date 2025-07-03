@@ -1,6 +1,5 @@
 import os
 import json
-import aiohttp
 from datetime import datetime
 from pathlib import Path
 from dotenv import load_dotenv
@@ -14,7 +13,6 @@ from telegram.ext import (
 load_dotenv()
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 ADMIN_ID = int(os.getenv("ADMIN_ID"))
-NOWPAYMENTS_API_KEY = os.getenv("NOWPAYMENTS_API_KEY")
 
 # Init user DB
 if not Path("users.json").exists():
@@ -95,33 +93,24 @@ async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("✅ Message envoyé")
 
 async def buy(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = str(update.effective_user.id)
-    async with aiohttp.ClientSession() as session:
-        body = {
-            "price_amount": 120,
-            "price_currency": "eur",
-            "pay_currency": "btc",
-            "order_id": user_id,
-            "order_description": "Licence LemonSpoofer 2 mois"
-        }
-        headers = {
-            "x-api-key": NOWPAYMENTS_API_KEY,
-            "Content-Type": "application/json"
-        }
-        async with session.post("https://api.nowpayments.io/v1/payment", json=body, headers=headers) as resp:
-            data = await resp.json()
-            payment_info = data.get("payment_details", {})
-            btc_address = payment_info.get("pay_address")
-            btc_amount = payment_info.get("pay_amount")
+    msg = (
+        "💳 Pour acheter ta licence (120€), envoie la somme sur l'une des adresses suivantes :\n\n"
+        "🟠 Bitcoin (BTC):\n<code>bc1q2zzg5unqtl4fvegzv6ehhevyrpkeasm4yzx5z4</code>\n\n"
+        "🟣 Ethereum (ETH):\n<code>0x621A53AB204513fFC5AeacC5bd9bfe15a42Cf2D0</code>\n\n"
+        "🔵 Solana (SOL):\n<code>2WXPZuqUDpwHfnkhR45CyUnj2g7HULMMX5xje8GzDGrT</code>\n\n"
+        "📩 Une fois le paiement envoyé, envoie la preuve au support ou attends l'activation automatique."
+    )
+    await update.callback_query.message.reply_text(msg, parse_mode="HTML")
 
-            if btc_address and btc_amount:
-                msg = (
-                    f"💸 Envoie exactement <b>{btc_amount} BTC</b> à cette adresse :\n"
-                    f"<code>{btc_address}</code>"
-                )
-                await update.callback_query.message.reply_text(msg, parse_mode="HTML")
-            else:
-                await update.callback_query.message.reply_text("❌ Erreur paiement licence.")
+async def recharge(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    msg = (
+        "💸 Pour recharger tes crédits (5€ minimum), utilise une de ces adresses :\n\n"
+        "🟠 Bitcoin (BTC):\n<code>bc1q2zzg5unqtl4fvegzv6ehhevyrpkeasm4yzx5z4</code>\n\n"
+        "🟣 Ethereum (ETH):\n<code>0x621A53AB204513fFC5AeacC5bd9bfe15a42Cf2D0</code>\n\n"
+        "🔵 Solana (SOL):\n<code>2WXPZuqUDpwHfnkhR45CyUnj2g7HULMMX5xje8GzDGrT</code>\n\n"
+        "📩 Envoie une preuve au support ou attends la recharge automatique si activée."
+    )
+    await update.callback_query.message.reply_text(msg, parse_mode="HTML")
 
 async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -132,7 +121,8 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if data == "buy":
         return await buy(update, context)
-
+    if data == "recharge":
+        return await recharge(update, context)
     elif data in ["sip", "sms", "caller_id", "musique"]:
         license_ok = users[user_id].get("license_expiry")
         if not license_ok:
@@ -141,7 +131,6 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 app = ApplicationBuilder().token(BOT_TOKEN).build()
 app.add_handler(CommandHandler("start", start))
-app.add_handler(CommandHandler("buy", buy))
 app.add_handler(CommandHandler("admin", admin))
 app.add_handler(CommandHandler("broadcast", broadcast))
 app.add_handler(CallbackQueryHandler(handle_callback))
