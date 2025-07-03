@@ -109,20 +109,19 @@ async def buy(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "Content-Type": "application/json"
         }
         async with session.post("https://api.nowpayments.io/v1/payment", json=body, headers=headers) as resp:
-        data = await resp.json()
-        await update.callback_query.message.reply_text(str(data))  # Debug
+            data = await resp.json()
             payment_info = data.get("payment_details", {})
             btc_address = payment_info.get("pay_address")
             btc_amount = payment_info.get("pay_amount")
 
-    if btc_address and btc_amount:
-        msg = (
-            f"💸 Envoie exactement <b>{btc_amount} BTC</b> à cette adresse :\n"
-            f"<code>{btc_address}</code>"
-        )
-        await update.callback_query.message.reply_text(msg, parse_mode="HTML")
-    else:
-        await update.callback_query.message.reply_text("❌ Erreur paiement licence.")
+            if btc_address and btc_amount:
+                msg = (
+                    f"💸 Envoie exactement <b>{btc_amount} BTC</b> à cette adresse :\n"
+                    f"<code>{btc_address}</code>"
+                )
+                await update.callback_query.message.reply_text(msg, parse_mode="HTML")
+            else:
+                await update.callback_query.message.reply_text("❌ Erreur paiement licence.")
 
 async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
