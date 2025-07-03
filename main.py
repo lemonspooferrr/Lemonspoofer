@@ -108,9 +108,9 @@ async def buy(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "x-api-key": NOWPAYMENTS_API_KEY,
             "Content-Type": "application/json"
         }
-        async with session.post("https://api.nowpayments.io/v1/invoice", json=body, headers=headers) as resp:
+        async with session.post("https://api.nowpayments.io/v1/payment", json=body, headers=headers) as resp:
             data = await resp.json()
-            url = data.get("invoice_url")
+            url = data.get("payment_url")
 
     if url:
         await update.callback_query.message.reply_text(f"🔐 Paiement licence :\n{url}")
