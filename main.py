@@ -54,7 +54,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     now = datetime.now().strftime('%H:%M:%S')
     user_data = users[uid]
-    license_status = user_data.get('license_expiry', '❌ Inactive')
+    license_status = user_data.get('license_expiry') or '❌ Inactive'
 
     msg = (
         f"👋 Bienvenue sur Lemon Spoofer {user.first_name} !\n\n"
@@ -109,7 +109,8 @@ async def buy(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "Content-Type": "application/json"
         }
         async with session.post("https://api.nowpayments.io/v1/payment", json=body, headers=headers) as resp:
-            data = await resp.json()
+        data = await resp.json()
+        await update.callback_query.message.reply_text(str(data))  # Debug
             payment_info = data.get("payment_details", {})
             btc_address = payment_info.get("pay_address")
             btc_amount = payment_info.get("pay_amount")
@@ -146,4 +147,3 @@ app.add_handler(CommandHandler("admin", admin))
 app.add_handler(CommandHandler("broadcast", broadcast))
 app.add_handler(CallbackQueryHandler(handle_callback))
 app.run_polling()
-
