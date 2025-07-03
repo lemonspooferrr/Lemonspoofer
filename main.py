@@ -1,5 +1,6 @@
 import os
 import json
+import logging
 from datetime import datetime, timedelta
 from pathlib import Path
 from dotenv import load_dotenv
@@ -34,13 +35,12 @@ def main_menu(user_id):
         [InlineKeyboardButton("📲 Caller ID", callback_data="caller_id")],
         [InlineKeyboardButton("🎵 Musique d’attente", callback_data="musique")],
         [InlineKeyboardButton("🛒 Acheter licence (120€)", callback_data="buy")],
-        [InlineKeyboardButton("➕ Recharger crédits", callback_data="recharge")],
-        [InlineKeyboardButton("✅ J’ai payé", callback_data="paid")],
         [InlineKeyboardButton("📩 Support", url="https://t.me/LemonSupportSL")]
     ])
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
+    log_action(user, '/start command')
     users = load_users()
     uid = str(user.id)
     if uid not in users:
@@ -66,50 +66,76 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(msg, reply_markup=main_menu(uid), parse_mode="HTML")
 
 async def buy(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    uid = str(update.effective_user.id)
     msg = (
         "💳 Pour acheter ta licence (120€), envoie la somme sur l'une des adresses suivantes :\n\n"
         "💰 Bitcoin (BTC) : <code>bc1q2zzg5unqtl4fvegzv6ehhevyrpkeasm4yzx5z4</code>\n"
         "🪙 Solana (SOL) : <code>2WXPZuqUDpwHfnkhR45CyUnj2g7HULMMX5xje8GzDGrT</code>\n"
         "🧠 Ethereum (ETH) : <code>0x621A53AB204513fFC5AeacC5bd9bfe15a42Cf2D0</code>\n\n"
-        "📩 Puis clique sur '✅ J’ai payé' ci-dessous ou contacte @LemonSupportSL."
+        "📩 Puis clique sur l’un des boutons ci-dessous."
     )
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("✅ J’ai payé", callback_data="paid")],
+        [InlineKeyboardButton("➕ Recharger crédits", callback_data="recharge")]
+    ])
+    await update.callback_query.message.reply_text(msg, reply_markup=keyboard, parse_mode="HTML")
+
+async def recharge(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    msg = (
+        "💸 Recharge disponible à partir de 5€ minimum. Merci d’envoyer sur :\n\n"
+        "💰 Bitcoin (BTC) : <code>bc1q2zzg5unqtl4fvegzv6ehhevyrpkeasm4yzx5z4</code>\n"
+        "📩 Puis clique sur '✅ J’ai payé' ou contacte @LemonSupportSL."
+    )
+    log_action(update.effective_user, 'Recharge demandée')
     await update.callback_query.message.reply_text(msg, parse_mode="HTML")
 
-async def admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id != ADMIN_ID:
-        return await update.message.reply_text("⛔ Accès refusé")
-    users = load_users()
-    total_users = len(users)
-    total_credits = sum(u.get("credits", 0) for u in users.values())
-    total_licenses = sum(1 for u in users.values() if u.get("license_expiry"))
-    msg = (
-        f"📊 Statistiques :\n"
-        f"👥 Utilisateurs : {total_users}\n"
-        f"💰 Crédits totaux : {total_credits}\n"
-        f"✅ Licences actives : {total_licenses}"
-    )
-    await update.message.reply_text(msg)
-
 async def paid_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.callback_query.message.reply_text("🕵️ Paiement en attente de validation. Vous serez notifié une fois la licence activée.")
+    user = update.effective_user
+    log_action(user, '/start command')
+    log_action(update.effective_user, '✅ J’ai payé')
+    await update.callback_query.message.reply_text("🕵️ Paiement reçu ou en attente de validation. Tu seras notifié sous peu.")
+    await context.bot.send_message(
+        chat_id=ADMIN_ID,
+        text=f"🔔 L'utilisateur @{user.username} ({user.id}) a cliqué sur ✅ J’ai payé."
+    )
 
 async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    user_id = str(query.from_user.id)
-    users = load_users()
     data = query.data
     await query.answer()
 
     if data == "buy":
+        log_action(update.effective_user, 'Ouverture menu achat licence')
         return await buy(update, context)
-    elif data == "paid":
+    if data == "paid":
         return await paid_callback(update, context)
-    elif data in ["sip", "sms", "caller_id", "musique"]:
-        license_ok = users[user_id].get("license_expiry")
-        if not license_ok:
+    if data == "recharge":
+        return await recharge(update, context)
+
+    users = load_users()
+    uid = str(query.from_user.id)
+    if data in ["sip", "sms", "caller_id", "musique"]:
+        if not users.get(uid, {}).get("license_expiry"):
             return await query.edit_message_text("🚫 Licence requise pour utiliser cette option.")
+        log_action(update.effective_user, f'Utilisation fonction : {data}')
         await query.edit_message_text(f"✅ Fonctionnalité {data} activée (simulation)")
+
+
+# Setup logging
+logging.basicConfig(
+    filename="logs.txt",
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s"
+)
+
+def log_action(user, action):
+    logging.info(f"User {user.username} ({user.id}) - {action}")
+
+    try:
+        with open("logs.txt", "a", encoding="utf-8") as f:
+            f.write(f"{datetime.now().isoformat()} - {user.username} ({user.id}) - {action}\n")
+    except Exception as e:
+        print(f"Logging error: {e}")
+
 
 async def activate_license(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID:
@@ -124,6 +150,7 @@ async def activate_license(update: Update, context: ContextTypes.DEFAULT_TYPE):
         expiry_date = (datetime.now() + timedelta(days=days)).strftime('%Y-%m-%d')
         users[uid]["license_expiry"] = expiry_date
         save_users(users)
+        log_action(update.effective_user, f"/active {uid} {days} jours")
         await update.message.reply_text(f"✅ Licence activée pour l'utilisateur {uid} jusqu’au {expiry_date}.")
     except:
         await update.message.reply_text("❗ Utilisation : /active <id> [jours]")
@@ -139,13 +166,14 @@ async def add_credits(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return await update.message.reply_text("❌ Utilisateur introuvable.")
         users[uid]["credits"] += amount
         save_users(users)
+        log_action(update.effective_user, f"/credits {uid} +{amount}")
         await update.message.reply_text(f"✅ {amount} crédits ajoutés à l’utilisateur {uid}.")
     except:
         await update.message.reply_text("❗ Utilisation : /credits <id> <montant>")
 
+# Appel bot
 app = ApplicationBuilder().token(BOT_TOKEN).build()
 app.add_handler(CommandHandler("start", start))
-app.add_handler(CommandHandler("admin", admin))
 app.add_handler(CommandHandler("active", activate_license))
 app.add_handler(CommandHandler("credits", add_credits))
 app.add_handler(CallbackQueryHandler(handle_callback))
