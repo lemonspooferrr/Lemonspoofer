@@ -54,7 +54,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     now = datetime.now().strftime('%H:%M:%S')
     user_data = users[uid]
-    license_status = user_data['license_expiry'] or '❌ Inactive'
+    license_status = user_data.get('license_expiry', '❌ Inactive')
 
     msg = (
         f"👋 Bienvenue sur Lemon Spoofer {user.first_name} !\n\n"
@@ -108,12 +108,18 @@ async def buy(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "x-api-key": NOWPAYMENTS_API_KEY,
             "Content-Type": "application/json"
         }
-        async with session.post("https://api.nowpayments.io/v1/invoice", json=body, headers=headers) as resp:
+        async with session.post("https://api.nowpayments.io/v1/payment", json=body, headers=headers) as resp:
             data = await resp.json()
-            url = data.get("invoice_url")
+            payment_info = data.get("payment_details", {})
+            btc_address = payment_info.get("pay_address")
+            btc_amount = payment_info.get("pay_amount")
 
-    if url:
-        await update.callback_query.message.reply_text(f"🔐 Paiement licence :\n{url}")
+    if btc_address and btc_amount:
+        msg = (
+            f"💸 Envoie exactement <b>{btc_amount} BTC</b> à cette adresse :\n"
+            f"<code>{btc_address}</code>"
+        )
+        await update.callback_query.message.reply_text(msg, parse_mode="HTML")
     else:
         await update.callback_query.message.reply_text("❌ Erreur paiement licence.")
 
@@ -126,30 +132,6 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if data == "buy":
         return await buy(update, context)
-
-    if data == "recharge":
-        async with aiohttp.ClientSession() as session:
-            body = {
-                "price_amount": 5,
-                "price_currency": "eur",
-                "pay_currency": "usdttrc20",
-                "order_id": user_id,
-                "order_description": "Recharge crédits LemonSpoofer"
-            }
-            headers = {
-                "x-api-key": NOWPAYMENTS_API_KEY,
-                "Content-Type": "application/json"
-            }
-            async with session.post("https://api.nowpayments.io/v1/invoice", json=body, headers=headers) as resp:
-                data = await resp.json()
-                invoice_url = data.get("invoice_url")
-
-        if invoice_url:
-            await query.edit_message_text("💸 Recharge tes crédits ici :", reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("🔗 Payer maintenant", url=invoice_url)]
-            ]))
-        else:
-            await query.edit_message_text("❌ Erreur lors de la génération du lien de paiement.")
 
     elif data in ["sip", "sms", "caller_id", "musique"]:
         license_ok = users[user_id].get("license_expiry")
@@ -164,3 +146,4 @@ app.add_handler(CommandHandler("admin", admin))
 app.add_handler(CommandHandler("broadcast", broadcast))
 app.add_handler(CallbackQueryHandler(handle_callback))
 app.run_polling()
+
