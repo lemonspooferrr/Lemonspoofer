@@ -7,8 +7,11 @@ from dotenv import load_dotenv
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import (
     ApplicationBuilder, CommandHandler, CallbackQueryHandler,
-    ContextTypes
+    MessageHandler, filters, ContextTypes
 )
+import threading
+import http.server
+import socketserver
 
 # Load .env
 load_dotenv()
@@ -40,6 +43,7 @@ def main_menu(user_id):
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
+    print("✅ /start déclenché par", user.id)
     log_action(user, '/start command')
     users = load_users()
     uid = str(user.id)
@@ -91,14 +95,9 @@ async def recharge(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def paid_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
-    log_action(user, '/start command')
-    log_action(update.effective_user, '✅ J’ai payé')
+    log_action(user, '✅ J’ai payé')
     await context.bot.send_message(chat_id=ADMIN_ID, text=f'🚨 Paiement signalé par @{update.effective_user.username} ({update.effective_user.id})')
     await update.callback_query.message.reply_text("🕵️ Paiement reçu ou en attente de validation. Tu seras notifié sous peu.")
-    await context.bot.send_message(
-        chat_id=ADMIN_ID,
-        text=f"🔔 L'utilisateur @{user.username} ({user.id}) a cliqué sur ✅ J’ai payé."
-    )
 
 async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -107,7 +106,6 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if data == "buy":
         log_action(update.effective_user, 'Ouverture menu achat licence')
-        await context.bot.send_message(chat_id=ADMIN_ID, text=f'🛒 Menu achat ouvert par @{update.effective_user.username} ({update.effective_user.id})')
         return await buy(update, context)
     if data == "paid":
         return await paid_callback(update, context)
@@ -120,59 +118,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not users.get(uid, {}).get("license_expiry"):
             return await query.edit_message_text("🚫 Licence requise pour utiliser cette option.")
         log_action(update.effective_user, f'Utilisation fonction : {data}')
-        await context.bot.send_message(chat_id=ADMIN_ID, text=f'📲 @{update.effective_user.username} ({update.effective_user.id}) a utilisé : {data}')
         await query.edit_message_text(f"✅ Fonctionnalité {data} activée (simulation)")
-
-# Setup logging
-logging.basicConfig(
-    filename="logs.txt",
-    level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(message)s"
-)
-
-def log_action(user, action):
-    logging.info(f"User {user.username} ({user.id}) - {action}")
-    try:
-        with open("logs.txt", "a", encoding="utf-8") as f:
-            f.write(f"{datetime.now().isoformat()} - {user.username} ({user.id}) - {action}\n")
-    except Exception as e:
-        print(f"Logging error: {e}")
-
-async def activate_license(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id != ADMIN_ID:
-        return await update.message.reply_text("⛔ Accès refusé")
-    try:
-        args = context.args
-        uid = args[0]
-        days = int(args[1]) if len(args) > 1 else 60
-        users = load_users()
-        if uid not in users:
-            return await update.message.reply_text("❌ Utilisateur introuvable.")
-        expiry_date = (datetime.now() + timedelta(days=days)).strftime('%Y-%m-%d')
-        users[uid]["license_expiry"] = expiry_date
-        save_users(users)
-        log_action(update.effective_user, f"/active {uid} {days} jours")
-        await context.bot.send_message(chat_id=ADMIN_ID, text=f'🔓 Licence activée pour {uid} ({days} jours)')
-        await update.message.reply_text(f"✅ Licence activée pour l'utilisateur {uid} jusqu’au {expiry_date}.")
-    except:
-        await update.message.reply_text("❗ Utilisation : /active <id> [jours]")
-
-async def add_credits(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id != ADMIN_ID:
-        return await update.message.reply_text("⛔ Accès refusé")
-    try:
-        uid = context.args[0]
-        amount = int(context.args[1])
-        users = load_users()
-        if uid not in users:
-            return await update.message.reply_text("❌ Utilisateur introuvable.")
-        users[uid]["credits"] += amount
-        save_users(users)
-        log_action(update.effective_user, f"/credits {uid} +{amount}")
-        await context.bot.send_message(chat_id=ADMIN_ID, text=f'💰 Crédit ajouté : {uid} (+{amount})')
-        await update.message.reply_text(f"✅ {amount} crédits ajoutés à l’utilisateur {uid}.")
-    except:
-        await update.message.reply_text("❗ Utilisation : /credits <id> <montant>")
 
 async def admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID:
@@ -187,19 +133,7 @@ async def admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"💰 Crédits totaux : {total_credits}\n"
         f"✅ Licences actives : {total_licenses}"
     )
-    log_action(update.effective_user, "/admin consulté")
     await update.message.reply_text(msg)
-
-async def logs(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id != ADMIN_ID:
-        return await update.message.reply_text("⛔ Accès refusé")
-    try:
-        with open("logs.txt", "r", encoding="utf-8") as f:
-            lines = f.readlines()[-10:]
-            content = "".join(lines)
-        await update.message.reply_text(f"📝 Derniers logs :\n\n<code>{content}</code>", parse_mode="HTML")
-    except Exception as e:
-        await update.message.reply_text("❌ Impossible de lire les logs.")
 
 async def help(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = (
@@ -218,42 +152,23 @@ async def help(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     await update.message.reply_text(msg, parse_mode="HTML")
 
-async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id != ADMIN_ID:
-        return await update.message.reply_text("⛔ Accès refusé")
+def log_action(user, action):
+    logging.info(f"User {user.username} ({user.id}) - {action}")
+    try:
+        with open("logs.txt", "a", encoding="utf-8") as f:
+            f.write(f"{datetime.now().isoformat()} - {user.username} ({user.id}) - {action}\n")
+    except Exception as e:
+        print(f"Logging error: {e}")
 
-    msg = ' '.join(context.args)
-    if not msg:
-        return await update.message.reply_text("❗ Utilise: /broadcast Votre message")
-
-    users = load_users()
-    sent = 0
-    for uid in users:
-        try:
-            await context.bot.send_message(chat_id=int(uid), text=msg)
-            sent += 1
-        except:
-            continue
-
-    log_action(update.effective_user, f"/broadcast envoyé à {sent} utilisateurs")
-    await update.message.reply_text(f"✅ Message envoyé à {sent} utilisateurs.")
-
-# Appel bot
+# Init bot
 app = ApplicationBuilder().token(BOT_TOKEN).build()
 app.add_handler(CommandHandler("start", start))
+app.add_handler(MessageHandler(filters.TEXT & filters.Regex("^/start$"), start))
 app.add_handler(CommandHandler("admin", admin))
-app.add_handler(CommandHandler("logs", logs))
 app.add_handler(CommandHandler("help", help))
-app.add_handler(CommandHandler("broadcast", broadcast))
-app.add_handler(CommandHandler("active", activate_license))
-app.add_handler(CommandHandler("credits", add_credits))
 app.add_handler(CallbackQueryHandler(handle_callback))
 
-# Keep bot alive (Render patch sans Flask)
-import threading
-import http.server
-import socketserver
-
+# Keep alive Render
 def keep_alive():
     handler = http.server.SimpleHTTPRequestHandler
     with socketserver.TCPServer(("", 8080), handler) as httpd:
