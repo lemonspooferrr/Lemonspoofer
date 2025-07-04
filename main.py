@@ -123,7 +123,6 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await context.bot.send_message(chat_id=ADMIN_ID, text=f'📲 @{update.effective_user.username} ({update.effective_user.id}) a utilisé : {data}')
         await query.edit_message_text(f"✅ Fonctionnalité {data} activée (simulation)")
 
-
 # Setup logging
 logging.basicConfig(
     filename="logs.txt",
@@ -133,13 +132,11 @@ logging.basicConfig(
 
 def log_action(user, action):
     logging.info(f"User {user.username} ({user.id}) - {action}")
-
     try:
         with open("logs.txt", "a", encoding="utf-8") as f:
             f.write(f"{datetime.now().isoformat()} - {user.username} ({user.id}) - {action}\n")
     except Exception as e:
         print(f"Logging error: {e}")
-
 
 async def activate_license(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID:
@@ -177,7 +174,6 @@ async def add_credits(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except:
         await update.message.reply_text("❗ Utilisation : /credits <id> <montant>")
 
-
 async def admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID:
         return await update.message.reply_text("⛔ Accès refusé")
@@ -194,8 +190,6 @@ async def admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
     log_action(update.effective_user, "/admin consulté")
     await update.message.reply_text(msg)
 
-
-
 async def logs(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID:
         return await update.message.reply_text("⛔ Accès refusé")
@@ -206,8 +200,6 @@ async def logs(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"📝 Derniers logs :\n\n<code>{content}</code>", parse_mode="HTML")
     except Exception as e:
         await update.message.reply_text("❌ Impossible de lire les logs.")
-
-
 
 async def help(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = (
@@ -225,8 +217,6 @@ async def help(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "📩 Besoin d’aide ? Contacte : @LemonSupportSL"
     )
     await update.message.reply_text(msg, parse_mode="HTML")
-
-
 
 async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID:
@@ -248,7 +238,6 @@ async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     log_action(update.effective_user, f"/broadcast envoyé à {sent} utilisateurs")
     await update.message.reply_text(f"✅ Message envoyé à {sent} utilisateurs.")
 
-
 # Appel bot
 app = ApplicationBuilder().token(BOT_TOKEN).build()
 app.add_handler(CommandHandler("start", start))
@@ -259,4 +248,16 @@ app.add_handler(CommandHandler("broadcast", broadcast))
 app.add_handler(CommandHandler("active", activate_license))
 app.add_handler(CommandHandler("credits", add_credits))
 app.add_handler(CallbackQueryHandler(handle_callback))
+
+# Keep bot alive (Render patch sans Flask)
+import threading
+import http.server
+import socketserver
+
+def keep_alive():
+    handler = http.server.SimpleHTTPRequestHandler
+    with socketserver.TCPServer(("", 8080), handler) as httpd:
+        httpd.serve_forever()
+
+threading.Thread(target=keep_alive).start()
 app.run_polling()
