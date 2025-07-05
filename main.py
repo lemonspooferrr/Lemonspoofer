@@ -38,7 +38,7 @@ def main_menu(user_id):
         [InlineKeyboardButton("📲 Caller ID", callback_data="caller_id")],
         [InlineKeyboardButton("🎵 Musique d’attente", callback_data="musique")],
         [InlineKeyboardButton("🛒 Acheter licence (120€)", callback_data="buy")],
-        [InlineKeyboardButton("📩 Support", url="https://t.me/LemonSupportSL")]
+        [InlineKeyboardButton("📩 Support", url="https://t.me/LemonCloudSL")]
     ])
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
