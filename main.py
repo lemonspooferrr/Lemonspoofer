@@ -87,7 +87,7 @@ async def recharge(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = (
         "💸 Recharge disponible à partir de 5€ minimum. Merci d’envoyer sur :\n\n"
         "💰 Bitcoin (BTC) : <code>bc1q2zzg5unqtl4fvegzv6ehhevyrpkeasm4yzx5z4</code>\n"
-        "📩 Puis clique sur '✅ J’ai payé' ou contacte @LemonSupportSL."
+        "📩 Puis clique sur '✅ J’ai payé' ou contacte @LemonCLOUDSL."
     )
     log_action(update.effective_user, 'Recharge demandée')
     await context.bot.send_message(chat_id=ADMIN_ID, text=f'🔄 Recharge demandée par @{update.effective_user.username} ({update.effective_user.id})')
