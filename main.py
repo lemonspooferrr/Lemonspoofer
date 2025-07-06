@@ -65,7 +65,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"💼 <b>Statut licence :</b> {license_status}\n"
         f"💳 <b>Crédits :</b> <code>{user_data['credits']}</code>\n\n"
         f"🔒 <b>Accès restreint :</b> Une licence active est requise pour débloquer les fonctionnalités du service.\n"
-        f"💰 <b>Prix de la licence :</b> 120€ (paiement en crypto).\n\n"
+        f"💰 <b>Prix de la licence :</b> 120€ pour 2 mois(paiement en crypto).\n\n"
         f"📍 Utilisez le menu ci-dessous pour acheter une licence ou contacter le support si besoin."
     )
     await update.message.reply_text(msg, reply_markup=main_menu(uid), parse_mode="HTML")
