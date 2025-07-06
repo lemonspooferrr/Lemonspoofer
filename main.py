@@ -56,16 +56,17 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         }
         save_users(users)
 
-    now = datetime.now().strftime('%H:%M:%S')
     user_data = users[uid]
     license_status = "✅ Active" if user_data.get("license_expiry") else "❌ Inactive"
 
     msg = (
-        f"👋 Bienvenue sur Lemon Spoofer {user.first_name} !\n\n"
-        f"🆔 ID: <code>{uid}</code>\n"
-        f"💳 Crédits : {user_data['credits']}\n"
-        f"🪪 Licence : {license_status}\n"
-        f"🕒 Heure : {now}"
+        f"🛰️ <b>Bienvenue sur <u>LemonSpoofer</u>, {user.first_name} !</b>\n\n"
+        f"🆔 <b>ID utilisateur :</b> <code>{uid}</code>\n"
+        f"💼 <b>Statut licence :</b> {license_status}\n"
+        f"💳 <b>Crédits :</b> <code>{user_data['credits']}</code>\n\n"
+        f"🔒 <b>Accès restreint :</b> Une licence active est requise pour débloquer les fonctionnalités du service.\n"
+        f"💰 <b>Prix de la licence :</b> 120€ (paiement en crypto).\n\n"
+        f"📍 Utilisez le menu ci-dessous pour acheter une licence ou contacter le support si besoin."
     )
     await update.message.reply_text(msg, reply_markup=main_menu(uid), parse_mode="HTML")
 
@@ -152,6 +153,25 @@ async def help(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     await update.message.reply_text(msg, parse_mode="HTML")
 
+async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != ADMIN_ID:
+        return await update.message.reply_text("⛔ Accès refusé")
+    if len(context.args) == 0:
+        return await update.message.reply_text("❗ Utilisation : /broadcast <message>")
+    
+    message = "🔊 <b>Annonce :</b>\n" + " ".join(context.args)
+    users = load_users()
+    count = 0
+
+    for uid in users:
+        try:
+            await context.bot.send_message(chat_id=int(uid), text=message, parse_mode="HTML")
+            count += 1
+        except:
+            continue
+
+    await update.message.reply_text(f"✅ Message envoyé à {count} utilisateur(s).")
+
 def log_action(user, action):
     logging.info(f"User {user.username} ({user.id}) - {action}")
     try:
@@ -166,6 +186,7 @@ app.add_handler(CommandHandler("start", start))
 app.add_handler(MessageHandler(filters.TEXT & filters.Regex("^/start$"), start))
 app.add_handler(CommandHandler("admin", admin))
 app.add_handler(CommandHandler("help", help))
+app.add_handler(CommandHandler("broadcast", broadcast))
 app.add_handler(CallbackQueryHandler(handle_callback))
 
 # Keep alive Render
