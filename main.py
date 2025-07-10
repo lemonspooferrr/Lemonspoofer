@@ -46,7 +46,10 @@ def main_menu(user_id):
 
 # ==== ACHAT LICENCE ==== #
 async def buy(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = str(update.effective_user.id)
+    user = update.effective_user
+    await context.bot.send_message(chat_id=ADMIN_ID, text=f"🛒 Achat licence demandé par @{user.username or 'inconnu'} ({user.id})")
+
+    user_id = str(user.id)
     cryptos = ["btc", "eth", "ltc", "sol"]
 
     buttons = [
@@ -138,6 +141,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     print("✅ /start déclenché par", user.id)
     log_action(user, '/start command')
+
+    await context.bot.send_message(chat_id=ADMIN_ID, text=f"👋 /start par @{user.username or 'inconnu'} ({user.id})")
+
     users = load_users()
     uid = str(user.id)
     if uid not in users:
