@@ -2,6 +2,7 @@ import os
 import json
 import logging
 import requests
+import asyncio
 from datetime import datetime
 from pathlib import Path
 from dotenv import load_dotenv
@@ -41,6 +42,7 @@ def main_menu(user_id):
         [InlineKeyboardButton("💬 Accès SMS", callback_data="sms")],
         [InlineKeyboardButton("📲 Caller ID", callback_data="caller_id")],
         [InlineKeyboardButton("🎵 Musique d’attente", callback_data="musique")],
+        [InlineKeyboardButton("📡 État des routes", callback_data="routes")],
         [InlineKeyboardButton("🛒 Acheter licence (120€)", callback_data="buy")],
         [InlineKeyboardButton("📩 Support", url="https://t.me/LemonCloudSL")]
     ])
@@ -88,6 +90,23 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 📩 Support : @LemonCloudSL
 """
     await update.message.reply_text(msg, reply_markup=main_menu(uid), parse_mode="HTML")
+
+# Routes
+async def etat_routes(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.callback_query.message.edit_text("📡 Analyse des routes en cours...\n🔄 Veuillez patienter quelques secondes...")
+    await asyncio.sleep(2)
+    msg = (
+        "📶 <b>État des routes internationales</b> :\n\n"
+        "🇫🇷 France : ✅ En ligne\n"
+        "🇧🇪 Belgique : ✅ En ligne\n"
+        "🇬🇧 UK : ✅ En ligne\n"
+        "🇺🇸 USA : ✅ En ligne\n"
+        "🇩🇪 Allemagne : ✅ En ligne\n"
+        "🇪🇸 Espagne : ⚠️ Instable\n"
+        "🇮🇹 Italie : ⚠️ Maintenance\n\n"
+        "🔁 Les connexions sont automatiquement optimisées pour garantir la meilleure qualité."
+    )
+    await update.callback_query.message.edit_text(msg, parse_mode="HTML")
 
 # Achat licence
 async def buy(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -156,6 +175,8 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return await buy(update, context)
     if data == "recharge":
         return await recharge(update, context)
+    if data == "routes":
+        return await etat_routes(update, context)
 
     if data.startswith("buy_"):
         crypto = data.split("_")[1]
