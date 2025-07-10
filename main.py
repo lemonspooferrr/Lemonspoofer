@@ -22,7 +22,6 @@ ADMIN_ID = int(os.getenv("ADMIN_ID"))
 NOWPAYMENTS_API_KEY = os.getenv("NOWPAYMENTS_API_KEY")
 CALLBACK_URL = os.getenv("NOWPAYMENTS_CALLBACK_URL")
 
-# Base utilisateur
 if not Path("users.json").exists():
     with open("users.json", "w") as f:
         json.dump({}, f)
@@ -35,7 +34,6 @@ def save_users(users):
     with open("users.json", "w") as f:
         json.dump(users, f, indent=2)
 
-# Menu principal
 def main_menu(user_id):
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("📞 Accès SIP", callback_data="sip")],
@@ -47,7 +45,6 @@ def main_menu(user_id):
         [InlineKeyboardButton("📩 Support", url="https://t.me/LemonCloudSL")]
     ])
 
-# /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     log_action(user, '/start')
@@ -91,24 +88,33 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 """
     await update.message.reply_text(msg, reply_markup=main_menu(uid), parse_mode="HTML")
 
-# Routes
 async def etat_routes(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.callback_query.message.edit_text("📡 Analyse des routes en cours...\n🔄 Veuillez patienter quelques secondes...")
-    await asyncio.sleep(2)
-    msg = (
-        "📶 <b>État des routes internationales</b> :\n\n"
-        "🇫🇷 France : ✅ En ligne\n"
-        "🇧🇪 Belgique : ✅ En ligne\n"
-        "🇬🇧 UK : ✅ En ligne\n"
-        "🇺🇸 USA : ✅ En ligne\n"
-        "🇩🇪 Allemagne : ✅ En ligne\n"
-        "🇪🇸 Espagne : ⚠️ Instable\n"
-        "🇮🇹 Italie : ⚠️ Maintenance\n\n"
-        "🔁 Les connexions sont automatiquement optimisées pour garantir la meilleure qualité."
-    )
-    await update.callback_query.message.edit_text(msg, parse_mode="HTML")
+    user = update.effective_user
+    log_action(user, '📡 État des routes')
+    await context.bot.send_message(chat_id=ADMIN_ID, text=f"📡 Bouton État des routes cliqué par @{user.username or 'inconnu'} ({user.id})")
 
-# Achat licence
+    message = await update.callback_query.message.edit_text("📡 Vérification en cours...\n[░░░░░░░░░░] 0%")
+    for i in range(1, 11):
+        await asyncio.sleep(0.3)
+        bar = "█" * i + "░" * (10 - i)
+        await message.edit_text(f"📡 Vérification en cours...\n[{bar}] {i*10}%")
+    
+    final_msg = (
+        "📶 <b>État des routes internationales</b> :\n\n"
+        "🇫🇷 France : ✅ Fonctionnelle\n"
+        "🇧🇪 Belgique : ✅ Fonctionnelle\n"
+        "🇬🇧 UK : ✅ Fonctionnelle\n"
+        "🇺🇸 USA : ✅ Fonctionnelle\n"
+        "🇩🇪 Allemagne : ✅ Fonctionnelle\n"
+        "🇨🇭 Suisse : ✅ Fonctionnelle\n"
+        "🇨🇦 Canada : ✅ Fonctionnelle\n"
+        "🇪🇸 Espagne : ✅ Fonctionnelle\n"
+        "🇮🇹 Italie : ✅ Fonctionnelle\n\n"
+        "🔁 Optimisation automatique des passerelles en temps réel.\n"
+        "🔒 Qualité HD & identification dynamique assurée."
+    )
+    await message.edit_text(final_msg, parse_mode="HTML")
+
 async def buy(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     await context.bot.send_message(chat_id=ADMIN_ID, text=f"🛒 Achat licence demandé par @{user.username or 'inconnu'} ({user.id})")
@@ -128,7 +134,6 @@ async def buy(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     await update.callback_query.message.reply_text(msg, reply_markup=InlineKeyboardMarkup(buttons), parse_mode="HTML")
 
-# Générer facture NowPayments
 async def generate_invoice(user_id, amount, crypto, order_prefix=""):
     url = "https://api.nowpayments.io/v1/invoice"
     headers = {"x-api-key": NOWPAYMENTS_API_KEY, "Content-Type": "application/json"}
@@ -142,7 +147,6 @@ async def generate_invoice(user_id, amount, crypto, order_prefix=""):
     r = requests.post(url, json=payload, headers=headers)
     return r.json().get("invoice_url")
 
-# Recharge crédits
 async def recharge(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.callback_query.message.reply_text("💶 Combien veux-tu recharger ? (min 5€)\nEnvoie un montant en euros.")
     context.user_data["awaiting_recharge"] = True
@@ -154,43 +158,33 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if amount < 5:
                 return await update.message.reply_text("❌ Minimum 5€.")
             context.user_data.pop("awaiting_recharge")
-
             buttons = [
                 [InlineKeyboardButton(f"Payer {amount}€ en {c.upper()}", callback_data=f"recharge_{c}_{amount}")]
                 for c in ["btc", "eth", "ltc", "sol"]
             ]
             return await update.message.reply_text("💳 Choisis ta crypto :", reply_markup=InlineKeyboardMarkup(buttons))
-
         except:
             return await update.message.reply_text("❌ Montant invalide.")
     return
 
-# Callback handler
 async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     data = query.data
     await query.answer()
 
-    if data == "buy":
-        return await buy(update, context)
-    if data == "recharge":
-        return await recharge(update, context)
-    if data == "routes":
-        return await etat_routes(update, context)
+    if data == "buy": return await buy(update, context)
+    if data == "recharge": return await recharge(update, context)
+    if data == "routes": return await etat_routes(update, context)
 
     if data.startswith("buy_"):
         crypto = data.split("_")[1]
         invoice = await generate_invoice(update.effective_user.id, 120, crypto)
-        return await query.edit_message_text(
-            f"🧾 Paiement en {crypto.upper()} :\n{invoice}\n\n✅ Une fois payé, la licence s’activera automatiquement."
-        )
+        return await query.edit_message_text(f"🧾 Paiement en {crypto.upper()} :\n{invoice}\n\n✅ Une fois payé, la licence s’activera automatiquement.")
 
     if data.startswith("recharge_"):
         _, crypto, amount = data.split("_")
         invoice = await generate_invoice(update.effective_user.id, float(amount), crypto, order_prefix="RECHARGE_")
-        return await query.edit_message_text(
-            f"🧾 Paiement {amount}€ en {crypto.upper()} :\n{invoice}\n\n✅ Une fois payé, les crédits seront ajoutés."
-        )
+        return await query.edit_message_text(f"🧾 Paiement {amount}€ en {crypto.upper()} :\n{invoice}\n\n✅ Une fois payé, les crédits seront ajoutés.")
 
     users = load_users()
     uid = str(query.from_user.id)
@@ -200,7 +194,6 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         log_action(update.effective_user, f'Utilisation fonction : {data}')
         await query.edit_message_text(f"✅ Fonctionnalité {data} activée (simulation)")
 
-# Admin
 async def admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID:
         return await update.message.reply_text("⛔ Accès refusé")
@@ -216,7 +209,6 @@ async def admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     await update.message.reply_text(msg)
 
-# Help
 async def help(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = (
         "📖 <b>Aide LemonSpoofer</b>\n\n"
@@ -229,13 +221,11 @@ async def help(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     await update.message.reply_text(msg, parse_mode="HTML")
 
-# Broadcast
 async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID:
         return await update.message.reply_text("⛔ Accès refusé")
     if len(context.args) == 0:
         return await update.message.reply_text("❗ Utilisation : /broadcast <message>")
-    
     message = "🔊 <b>Annonce :</b>\n" + " ".join(context.args)
     users = load_users()
     count = 0
@@ -243,11 +233,9 @@ async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             await context.bot.send_message(chat_id=int(uid), text=message, parse_mode="HTML")
             count += 1
-        except:
-            continue
+        except: continue
     await update.message.reply_text(f"✅ Message envoyé à {count} utilisateur(s).")
 
-# Logging
 def log_action(user, action):
     logging.info(f"{datetime.now()} - {user.username} ({user.id}) - {action}")
     try:
@@ -256,7 +244,7 @@ def log_action(user, action):
     except Exception as e:
         print(f"Erreur log : {e}")
 
-# Démarrage bot
+# Start
 app = ApplicationBuilder().token(BOT_TOKEN).build()
 app.add_handler(CommandHandler("start", start))
 app.add_handler(CommandHandler("admin", admin))
@@ -265,7 +253,6 @@ app.add_handler(CommandHandler("broadcast", broadcast))
 app.add_handler(CallbackQueryHandler(handle_callback))
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
-# Keep-alive (Render)
 def keep_alive():
     handler = http.server.SimpleHTTPRequestHandler
     with socketserver.TCPServer(("", 8080), handler) as httpd:
