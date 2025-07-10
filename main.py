@@ -1,6 +1,7 @@
 import os
 import json
 import logging
+import requests
 from datetime import datetime, timedelta
 from pathlib import Path
 from dotenv import load_dotenv
@@ -17,6 +18,8 @@ import socketserver
 load_dotenv()
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 ADMIN_ID = int(os.getenv("ADMIN_ID"))
+NOWPAYMENTS_API_KEY = os.getenv("NOWPAYMENTS_API_KEY")
+CALLBACK_URL = os.getenv("NOWPAYMENTS_CALLBACK_URL")
 
 # Init user DB
 if not Path("users.json").exists():
@@ -41,6 +44,96 @@ def main_menu(user_id):
         [InlineKeyboardButton("📩 Support", url="https://t.me/LemonCloudSL")]
     ])
 
+# ==== ACHAT LICENCE ==== #
+async def buy(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = str(update.effective_user.id)
+    cryptos = ["btc", "eth", "ltc", "sol"]
+
+    buttons = [
+        [InlineKeyboardButton(f"💰 Payer en {crypto.upper()}", callback_data=f"buy_{crypto}")]
+        for crypto in cryptos
+    ]
+    keyboard = InlineKeyboardMarkup(buttons)
+    await update.callback_query.message.reply_text(
+        f"💳 Choisis ta crypto pour payer la licence (120€) :", reply_markup=keyboard
+    )
+
+async def generate_invoice(user_id, amount, crypto, order_prefix=""):
+    url = "https://api.nowpayments.io/v1/invoice"
+    headers = {
+        "x-api-key": NOWPAYMENTS_API_KEY,
+        "Content-Type": "application/json"
+    }
+    payload = {
+        "price_amount": amount,
+        "price_currency": "eur",
+        "pay_currency": crypto,
+        "order_id": f"{order_prefix}{user_id}",
+        "ipn_callback_url": CALLBACK_URL,
+    }
+    r = requests.post(url, json=payload, headers=headers)
+    return r.json().get("invoice_url")
+
+# ==== RECHARGE CREDITS ==== #
+async def recharge(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.callback_query.message.reply_text(
+        "💶 Combien veux-tu recharger ? (min 5€)\nEnvoie un montant en euros.",
+        parse_mode="HTML"
+    )
+    context.user_data["awaiting_recharge"] = True
+
+async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if context.user_data.get("awaiting_recharge"):
+        try:
+            amount = float(update.message.text.strip())
+            if amount < 5:
+                return await update.message.reply_text("❌ Minimum 5€.")
+            context.user_data.pop("awaiting_recharge")
+
+            buttons = [
+                [InlineKeyboardButton(f"Payer {amount}€ en {c.upper()}", callback_data=f"recharge_{c}_{amount}")]
+                for c in ["btc", "eth", "ltc", "sol"]
+            ]
+            return await update.message.reply_text("💳 Choisis ta crypto :", reply_markup=InlineKeyboardMarkup(buttons))
+
+        except:
+            return await update.message.reply_text("❌ Montant invalide.")
+    return
+
+# ==== CALLBACK HANDLER ==== #
+async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    data = query.data
+    await query.answer()
+
+    if data == "buy":
+        return await buy(update, context)
+    if data == "recharge":
+        return await recharge(update, context)
+
+    if data.startswith("buy_"):
+        crypto = data.split("_")[1]
+        invoice = await generate_invoice(update.effective_user.id, 120, crypto)
+        return await query.edit_message_text(
+            f"🧾 Paiement en {crypto.upper()} :\n{invoice}\n\n✅ Une fois payé, la licence s’activera automatiquement."
+        )
+
+    if data.startswith("recharge_"):
+        _, crypto, amount = data.split("_")
+        invoice = await generate_invoice(update.effective_user.id, float(amount), crypto, order_prefix="RECHARGE_")
+        return await query.edit_message_text(
+            f"🧾 Paiement {amount}€ en {crypto.upper()} :\n{invoice}\n\n✅ Une fois payé, les crédits seront ajoutés."
+        )
+
+    users = load_users()
+    uid = str(query.from_user.id)
+    if data in ["sip", "sms", "caller_id", "musique"]:
+        if not users.get(uid, {}).get("license_expiry"):
+            return await query.edit_message_text("🚫 Licence requise pour utiliser cette option.")
+        log_action(update.effective_user, f'Utilisation fonction : {data}')
+        await query.edit_message_text(f"✅ Fonctionnalité {data} activée (simulation)")
+
+# ==== /start ==== #
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     print("✅ /start déclenché par", user.id)
@@ -65,62 +158,12 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"💼 <b>Statut licence :</b> {license_status}\n"
         f"💳 <b>Crédits :</b> <code>{user_data['credits']}</code>\n\n"
         f"🔒 <b>Accès restreint :</b> Une licence active est requise pour débloquer les fonctionnalités du service.\n"
-        f"💰 <b>Prix de la licence :</b> 120€ pour 2 mois(paiement en crypto).\n\n"
-        f"📍 Utilisez le menu ci-dessous pour acheter une licence ou contacter le support si besoin."
+        f"💰 <b>Prix de la licence :</b> 120€ pour 2 mois (paiement en crypto).\n\n"
+        f"📍 Utilise le menu ci-dessous pour acheter une licence ou contacter le support."
     )
     await update.message.reply_text(msg, reply_markup=main_menu(uid), parse_mode="HTML")
 
-async def buy(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    msg = (
-        "💳 Pour acheter ta licence (120€), envoie la somme sur l'une des adresses suivantes :\n\n"
-        "💰 Bitcoin (BTC) : <code>bc1q2zzg5unqtl4fvegzv6ehhevyrpkeasm4yzx5z4</code>\n"
-        "🪙 Solana (SOL) : <code>2WXPZuqUDpwHfnkhR45CyUnj2g7HULMMX5xje8GzDGrT</code>\n"
-        "🧠 Ethereum (ETH) : <code>0x621A53AB204513fFC5AeacC5bd9bfe15a42Cf2D0</code>\n\n"
-        "📩 Puis clique sur l’un des boutons ci-dessous."
-    )
-    keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton("✅ J’ai payé", callback_data="paid")],
-        [InlineKeyboardButton("➕ Recharger crédits", callback_data="recharge")]
-    ])
-    await update.callback_query.message.reply_text(msg, reply_markup=keyboard, parse_mode="HTML")
-
-async def recharge(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    msg = (
-        "💸 Recharge disponible à partir de 5€ minimum. Merci d’envoyer sur :\n\n"
-        "💰 Bitcoin (BTC) : <code>bc1q2zzg5unqtl4fvegzv6ehhevyrpkeasm4yzx5z4</code>\n"
-        "📩 Puis clique sur '✅ J’ai payé' ou contacte @LemonCLOUDSL."
-    )
-    log_action(update.effective_user, 'Recharge demandée')
-    await context.bot.send_message(chat_id=ADMIN_ID, text=f'🔄 Recharge demandée par @{update.effective_user.username} ({update.effective_user.id})')
-    await update.callback_query.message.reply_text(msg, parse_mode="HTML")
-
-async def paid_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = update.effective_user
-    log_action(user, '✅ J’ai payé')
-    await context.bot.send_message(chat_id=ADMIN_ID, text=f'🚨 Paiement signalé par @{update.effective_user.username} ({update.effective_user.id})')
-    await update.callback_query.message.reply_text("🕵️ Paiement reçu ou en attente de validation. Tu seras notifié sous peu.")
-
-async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    data = query.data
-    await query.answer()
-
-    if data == "buy":
-        log_action(update.effective_user, 'Ouverture menu achat licence')
-        return await buy(update, context)
-    if data == "paid":
-        return await paid_callback(update, context)
-    if data == "recharge":
-        return await recharge(update, context)
-
-    users = load_users()
-    uid = str(query.from_user.id)
-    if data in ["sip", "sms", "caller_id", "musique"]:
-        if not users.get(uid, {}).get("license_expiry"):
-            return await query.edit_message_text("🚫 Licence requise pour utiliser cette option.")
-        log_action(update.effective_user, f'Utilisation fonction : {data}')
-        await query.edit_message_text(f"✅ Fonctionnalité {data} activée (simulation)")
-
+# ==== /admin ==== #
 async def admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID:
         return await update.message.reply_text("⛔ Accès refusé")
@@ -136,23 +179,20 @@ async def admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     await update.message.reply_text(msg)
 
+# ==== /help ==== #
 async def help(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = (
         "📖 <b>Aide LemonSpoofer</b>\n\n"
-        "🛠️ <b>Fonctionnalités disponibles :</b>\n"
-        "📞 <b>Accès SIP</b> – Fonction VoIP\n"
-        "💬 <b>Accès SMS</b> – Envoi de SMS via spoof\n"
-        "📲 <b>Caller ID</b> – Modifier ton numéro d’appel\n"
-        "🎵 <b>Musique d’attente</b> – Personnalisation\n\n"
-        "🪪 <b>Licence :</b> Obligatoire pour utiliser les fonctionnalités.\n"
-        "🔓 Pour acheter, clique sur 🛒 Acheter licence.\n"
-        "⚠️ Tu peux payer via BTC, SOLANA ou ETH.\n\n"
-        "💳 <b>Crédits :</b> Utiles pour certaines actions. Recharge via ➕ Recharger crédits.\n"
-        "✅ Clique sur “J’ai payé” pour alerter un admin après paiement.\n\n"
-        "📩 Besoin d’aide ? Contacte : @LemonSupportSL"
+        "🛠️ <b>Fonctionnalités :</b>\n"
+        "📞 Accès SIP | 💬 Accès SMS | 📲 Caller ID | 🎵 Musique d’attente\n\n"
+        "🪪 <b>Licence :</b> 120€ pour 2 mois (paiement en crypto)\n"
+        "💳 <b>Crédits :</b> recharge libre (min 5€)\n\n"
+        "🔗 Paiements auto en : BTC, ETH, LTC, SOL\n"
+        "📩 Support : @LemonCloudSL"
     )
     await update.message.reply_text(msg, parse_mode="HTML")
 
+# ==== /broadcast ==== #
 async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID:
         return await update.message.reply_text("⛔ Accès refusé")
@@ -162,34 +202,33 @@ async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message = "🔊 <b>Annonce :</b>\n" + " ".join(context.args)
     users = load_users()
     count = 0
-
     for uid in users:
         try:
             await context.bot.send_message(chat_id=int(uid), text=message, parse_mode="HTML")
             count += 1
         except:
             continue
-
     await update.message.reply_text(f"✅ Message envoyé à {count} utilisateur(s).")
 
+# ==== Logging ==== #
 def log_action(user, action):
-    logging.info(f"User {user.username} ({user.id}) - {action}")
+    logging.info(f"{datetime.now()} - {user.username} ({user.id}) - {action}")
     try:
         with open("logs.txt", "a", encoding="utf-8") as f:
             f.write(f"{datetime.now().isoformat()} - {user.username} ({user.id}) - {action}\n")
     except Exception as e:
         print(f"Logging error: {e}")
 
-# Init bot
+# ==== BOT INIT ==== #
 app = ApplicationBuilder().token(BOT_TOKEN).build()
 app.add_handler(CommandHandler("start", start))
-app.add_handler(MessageHandler(filters.TEXT & filters.Regex("^/start$"), start))
 app.add_handler(CommandHandler("admin", admin))
 app.add_handler(CommandHandler("help", help))
 app.add_handler(CommandHandler("broadcast", broadcast))
 app.add_handler(CallbackQueryHandler(handle_callback))
+app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
-# Keep alive Render
+# Keep alive on Render
 def keep_alive():
     handler = http.server.SimpleHTTPRequestHandler
     with socketserver.TCPServer(("", 8080), handler) as httpd:
