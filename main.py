@@ -144,7 +144,10 @@ async def generate_invoice(user_id, amount, crypto, order_prefix=""):
         "order_id": f"{order_prefix}{user_id}",
         "ipn_callback_url": CALLBACK_URL,
     }
-    r = requests.post(url, json=payload, headers=headers)
+    # Exécution non bloquante dans un thread
+    def _post():
+        return requests.post(url, json=payload, headers=headers)
+    r = await asyncio.to_thread(_post)
     return r.json().get("invoice_url")
 
 async def recharge(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -233,7 +236,8 @@ async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             await context.bot.send_message(chat_id=int(uid), text=message, parse_mode="HTML")
             count += 1
-        except: continue
+        except:
+            continue
     await update.message.reply_text(f"✅ Message envoyé à {count} utilisateur(s).")
 
 def log_action(user, action):
@@ -255,8 +259,9 @@ app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
 def keep_alive():
     handler = http.server.SimpleHTTPRequestHandler
-    with socketserver.TCPServer(("", 8080), handler) as httpd:
+    port = int(os.getenv("PORT", "8080"))
+    with socketserver.TCPServer(("", port), handler) as httpd:
         httpd.serve_forever()
 
-threading.Thread(target=keep_alive).start()
+threading.Thread(target=keep_alive, daemon=True).start()
 app.run_polling()
