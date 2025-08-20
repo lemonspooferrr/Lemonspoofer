@@ -232,7 +232,7 @@ def generate_invoice(user_id: int, amount_eur: float, crypto: str, order_prefix:
         "price_currency": "eur",
         "pay_currency": crypto.lower(),
         "order_id": f"{order_prefix}{user_id}",
-        "ipn_callback_url": CALLBACK_URL,
+        # "ipn_callback_url": CALLBACK_URL, # Desactivé
     }
     try:
         r = requests.post(url, json=payload, headers=headers, timeout=15)
